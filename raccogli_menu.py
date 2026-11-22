@@ -78,8 +78,16 @@ class HostPolicy:
     def load(self, root):
         rules = RobotFileParser()
         try:
-            _,_,data = request(root+"/robots.txt",512000)
-            rules.parse(data.decode("utf-8","replace").splitlines())
+            url=root+"/robots.txt"
+            for _ in range(5):
+                try:
+                    _,_,data = request(url,512000)
+                    rules.parse(data.decode("utf-8","replace").splitlines())
+                    break
+                except HTTPError as redirect:
+                    if redirect.code not in (301,302,303,307,308) or not redirect.headers.get("Location"):raise
+                    url=urljoin(url,redirect.headers["Location"])
+            else: rules.disallow_all=True
         except HTTPError as err:
             if err.code in (404,410): rules.allow_all = True
             else: rules.disallow_all = True
