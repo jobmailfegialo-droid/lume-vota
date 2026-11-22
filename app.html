@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#263b2d">
+  <meta name="description" content="Trova un locale in Italia, confronta i tuoi preferiti e invita gli amici a votare dove mangiare.">
+  <title>Lume · Dove si va stasera?</title>
+  <style>
+    * { box-sizing:border-box }
+    html,body { height:100%;margin:0;overflow:hidden;background:#eaece4 }
+    #root { display:flex;flex:1;height:100%;height:100dvh;max-width:620px;margin:auto;background:#faf9f5 }
+    #loading { align-self:center;margin:auto;padding:24px;color:#263b2d;font:16px/1.45 system-ui }
+    #loading strong { display:block;font:600 38px/1.2 Georgia,serif;margin-bottom:8px }
+    #loading a { color:inherit }
+  </style>
+  <link rel="license" href="dati-italia.zip" title="Dati dei locali © OpenStreetMap, ODbL 1.0">
+</head>
+<body>
+  <div id="root"><div id="loading" role="status"><strong>Lume</strong>Apro la guida dei locali italiani…<noscript> Attiva JavaScript per esplorare la guida.</noscript></div></div>
+  <script defer src="lume-8c777c07aab4.js" onerror="document.getElementById('loading').innerHTML='La guida non si è caricata. <a href=&quot;app.html&quot;>Riprova</a>'"></script>
+</body>
+</html>
