@@ -84,6 +84,10 @@ function render(data){
   });
   el('until').textContent=data.closed?'I risultati restano consultabili per 30 giorni dalla creazione.':'Si chiude il '+new Date(data.endsAt).toLocaleString('it-IT',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})+'.';
   el('close').hidden=!owner||data.closed;el('cancelClose').hidden=!confirmingClose||data.closed;el('close').textContent=confirmingClose?'Conferma chiusura':'Chiudi la votazione';el('credit').hidden=!data.options.some(v=>/^osm[-:]/.test(v.id));
+  // After voting, a signed poll offers to follow the person who sent it: that is how a vote turns into a friend on Lume.
+  const host=data.host&&uid.test(data.host.id||'')?data.host:null;
+  el('host').hidden=!host||!!owner||(data.myChoice==null&&!data.closed);
+  if(host){el('hostText').textContent='Segui '+host.nome+' su Lume: vedrai i posti che prova e le prossime cene che propone.';el('hostLink').href='app.html#profilo/'+host.id;}
   el('whatsapp').href='https://wa.me/?text='+encodeURIComponent(inviteText(data.options.map(v=>v.name),shareURL()));
 }
 async function refresh(){
