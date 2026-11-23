@@ -23,8 +23,9 @@ import unicodedata
 from urllib.parse import urlsplit
 from zipfile import ZipFile
 
-# Revisione incorporata nell'ultimo bundle dell'app: il feed viene ignorato se non è più alta.
-BUNDLE_REVISION = 2026112306
+# Revisione minima nota del bundle dell'app (build 2026112316 da lume-app): il feed viene ignorato se non è più alta.
+# Lo script legge comunque quella vera dal bundle caricato da app.html e usa la più alta.
+BUNDLE_REVISION = 2026112316
 TRUSTED = {"schema_menuitem", "stessa_riga", "pdf_testo_allineato"}
 WEAK = {"riga_precedente", "ocr_riga"}
 MIN_CENTS, MAX_CENTS = 100, 15000
@@ -240,6 +241,22 @@ def new_venues(sources, existing, rows, places, today, limit):
     return chosen, skipped
 
 
+def bundle_revision(app_html):
+    """Legge la revisione incorporata nel bundle che app.html carica (se presente)."""
+    try:
+        html = Path(app_html).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    found = 0
+    for src in re.findall(r'src="([^"]+\.js)"', html):
+        path = Path(app_html).parent / src.split("?")[0].lstrip("/")
+        if path.is_file():
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for m in re.finditer(r"(\d{10})\s*,\s*[\w$]+\s*=\s*['\"]https://[^'\"]*/menus\.json['\"]", text):
+                found = max(found, int(m.group(1)))
+    return found
+
+
 def valid_feed(feed, min_revision):
     """Copia dei controlli di validFeed nell'app: se uno fallisce, l'app scarta l'intero file."""
     errors = []
@@ -343,9 +360,11 @@ def main():
     cli.add_argument("--report", type=Path, default=Path("riassunto-prezzi.md"))
     cli.add_argument("--new-limit", type=int, default=300)
     cli.add_argument("--min-revision", type=int, default=BUNDLE_REVISION)
+    cli.add_argument("--app", type=Path, default=Path("app.html"), help="pagina dell'app da cui leggere la revisione del bundle")
     cli.add_argument("--today", default=datetime.now(timezone.utc).date().isoformat())
     args = cli.parse_args()
 
+    args.min_revision = max(args.min_revision, bundle_revision(args.app))
     feed = json.loads(args.menus.read_text(encoding="utf-8"))
     before = json.dumps(feed, ensure_ascii=False, sort_keys=True)
     venues = feed["venues"]
