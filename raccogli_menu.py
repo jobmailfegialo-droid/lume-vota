@@ -31,6 +31,8 @@ BAD_NAME = re.compile(r"\b(coperto|minimo|a partire|al kg|all.etto|all.hg|al pez
 TARIFF = re.compile(r"(?:€|EUR)\s*(\d{1,3}(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:€|EUR)",re.I)
 MENU_PATH = re.compile(r"\.(pdf|jpeg|jpg|png|webp)$",re.I)
 CANDIDATE_LIMIT = 320
+PERCORSI_MENU = ("menu/","menu","il-menu/","carta/","menu.pdf","ristorante/menu/","menu-ristorante/","pizze/")
+PROVA_PERCORSI = True
 
 def clean(text):
     return " ".join(str(text or "").split())
@@ -194,6 +196,11 @@ def extract_prices(lines,structured):
         method="stessa_riga"
         if not name and i>0:
             name=lines[i-1];method="riga_precedente"
+        elif name and i>0 and (name[:1].islower() or name.lower().startswith(("con ","servit"))):
+            # Riga di soli ingredienti: il nome del piatto è la riga sopra, se è un titolo breve senza prezzo.
+            title=lines[i-1].strip(" .·\t–—-:")
+            if 2<len(title)<=45 and not TARIFF.search(title) and not title[:1].islower():
+                name=title+" – "+name;method="titolo_e_ingredienti"
         add(name,cents(price.group(1) or price.group(2)),method)
     return list(found.values())[:CANDIDATE_LIMIT]
 
@@ -239,24 +246,37 @@ def collect(seed,policy):
         page,links=read_page(policy.fetch,start,bool(direct))
         if page and (direct or page["candidates"] or page["type"]=="pdf"):result["pages"].append(page)
         if not page or not page["candidates"]:
-            for link in links[:2]:
+            for link in links[:3]:
                 try:
                     child,_=read_page(policy.fetch,link,True)
                     if child:result["pages"].append(child)
                 except (ValueError,OSError,subprocess.TimeoutExpired):continue
+        if PROVA_PERCORSI and not direct and not any(p["candidates"] or p["type"]=="pdf" for p in result["pages"]):
+            # Molti siti hanno il menu in una pagina tipica senza un link riconoscibile dalla home.
+            root=urlunsplit(urlsplit(start)[:2]+("/","",""))
+            for path in PERCORSI_MENU:
+                url=urljoin(root,path)
+                if any(x["url"]==url for x in result["pages"]):continue
+                try:
+                    child,_=read_page(policy.fetch,url,True)
+                except (ValueError,OSError,subprocess.TimeoutExpired):continue
+                if child and (child["candidates"] or child["type"]=="pdf"):
+                    result["pages"].append(child);break
         result["status"]="prezzi_candidati" if any(p["candidates"] for p in result["pages"]) else "fonte_da_verificare" if result["pages"] else "nessun_menu"
     except (ValueError,OSError,subprocess.TimeoutExpired) as err:
         result["status"]="http_"+str(err.code) if isinstance(err,HTTPError) else "non_accessibile"
     return result
 
-def seeds(archive,mode,regione=None):
-    from geografia import Territorio,righe
+def seeds(archive,mode,regione=None,capoluoghi=None):
+    """capoluoghi: insieme di sigle di provincia; se dato, solo i locali del capoluogo di quelle province."""
+    from geografia import Territorio,righe,chiave
     territorio=Territorio(archive)
     for r in righe(archive):
         menu,site=public_url(r[12]),public_url(r[9])
         if (mode=="diretti" and not menu) or (mode=="siti" and (menu or not site)) or not(menu or site):continue
         localita,provincia,reg=territorio.luogo(r)
         if regione and reg!=regione:continue
+        if capoluoghi is not None and (provincia not in capoluoghi or chiave(localita)!=chiave(territorio.province[provincia]["capoluogo"])):continue
         yield {"id":r[0],"name":r[3],"kind":r[4],"city":r[6] or localita,"localita":localita,"provincia":provincia,"regione":reg,"menu":menu,"site":site}
 
 def main():
@@ -265,11 +285,20 @@ def main():
     cli.add_argument("--mode",choices=["diretti","siti","tutti"],default="diretti")
     cli.add_argument("--parts",type=int,default=1);cli.add_argument("--part",type=int,default=0)
     cli.add_argument("--regione",help="Solo i locali di questa regione, es. Lombardia")
+    cli.add_argument("--capoluoghi",help="Solo i capoluoghi: 'tutti', oppure un copertura.json per tenere solo quelli sotto obiettivo")
+    cli.add_argument("--senza-percorsi",action="store_true",help="Non provare /menu, /carta e simili sui siti senza link al menu")
     cli.add_argument("--workers",type=int,default=6);cli.add_argument("--limit",type=int)
     cli.add_argument("--output",type=Path,default=Path("raccolta"))
     args=cli.parse_args()
     if not 1<=args.workers<=12 or not 0<=args.part<args.parts:cli.error("Partizione o concorrenza non valida")
-    queue=[r for r in seeds(args.dataset,args.mode,args.regione) if int(hashlib.sha256(domain(r["menu"] or r["site"]).encode()).hexdigest(),16)%args.parts==args.part]
+    global PROVA_PERCORSI
+    PROVA_PERCORSI=not args.senza_percorsi
+    capoluoghi=None
+    if args.capoluoghi=="tutti":
+        capoluoghi={k for k in json.loads((Path(__file__).resolve().parent/"dati"/"territorio.json").read_text())["province"]}
+    elif args.capoluoghi:
+        capoluoghi={r["provincia"] for r in json.loads(Path(args.capoluoghi).read_text())["capoluoghi"] if r["mancano"]>0}
+    queue=[r for r in seeds(args.dataset,args.mode,args.regione,capoluoghi) if int(hashlib.sha256(domain(r["menu"] or r["site"]).encode()).hexdigest(),16)%args.parts==args.part]
     queue.sort(key=lambda x:(not x["menu"],x["kind"]!="restaurant",x["id"]))
     if args.limit is not None:queue=queue[:args.limit]
     args.output.mkdir(exist_ok=True,parents=True);counts=Counter();policy=HostPolicy()

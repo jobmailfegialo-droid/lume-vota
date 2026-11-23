@@ -42,12 +42,22 @@ acqua birr\\w* vino vini rosso bianco bollicine prosecco spritz negroni cocktail
 uovo uova frittata kebab piadina arrosticin\\w* olive ascolane supplì suppli arancin\\w* crocchett\\w* nachos chips wurstel
 """.split()) + r")\b", re.I)
 
+# Righe con prezzo che non sono un piatto: formati, supplementi, menu fissi generici, quantità.
+NON_PIATTO = re.compile(r"^(?:\(?\d+\s*(?:pz|pezzi|cl|ml|l|lt|gr?)\b|al\s+(?:pz|pezzo|kg|etto|hg)|bottiglia|calice|caraffa|menù\s+(?:da|base|completo|intermedio|degustazione)?\s*$|menu\s+da\b|\d+\s+portate|senza glutine|impasto|aggiunta|supplemento|extra\b|doppi[ao]\b|maxi\b|baby\b|piccol[ao]\b|medi[ao]\b|grande\b|intera\b|mezza\b|½|1/2)", re.I)
+DESCRIZIONE = re.compile(r"^(?:con|servit[oaie]|accompagnat[oaie]|leggermente|su letto|al profumo|e\s)\b")
+
+def pulisci(nome):
+    """None se la riga non è un piatto pubblicabile."""
+    if NON_PIATTO.search(nome) or len(nome) < 3: return None
+    if nome[:1].islower() and (DESCRIZIONE.search(nome) or "," in nome): return None  # solo ingredienti, il nome del piatto è altrove
+    return nome
+
 def punteggio(pagina, tipo):
     piatti, visti = [], set()
     for c in pagina.get("candidates", []):
         nome, cents = " ".join(str(c.get("name", "")).split()), c.get("cents")
         chiave = (nome.casefold(), cents)
-        if not nome or not isinstance(cents, int) or chiave in visti: continue
+        if not nome or not isinstance(cents, int) or chiave in visti or not pulisci(nome): continue
         visti.add(chiave); piatti.append({"name": nome, "cents": cents})
     if len(piatti) < MIN_PIATTI: return None, f"solo {len(piatti)} piatti"
     lo, hi, (mlo, mhi) = FASCE.get(tipo, FASCE["restaurant"])
