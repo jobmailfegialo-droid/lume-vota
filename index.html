@@ -1,7 +1,9 @@
-<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><meta name="theme-color" content="#1c382b"><title>Lume · Dove mangiamo?</title><link rel="stylesheet" href="voto.css"><script defer src="catalogo.js?v=2026112301"></script><script defer src="voto.js?v=2"></script></head><body>
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><meta name="theme-color" content="#1c382b"><title>Lume · Dove mangiamo?</title><link rel="stylesheet" href="voto.css?v=2"><script defer src="catalogo.js?v=2026112301"></script><script defer src="voto.js?v=3"></script></head><body>
 <header><b class="logo">✧ lume</b><span>Al tavolo insieme</span></header><main>
-<section id="setup" hidden><h1>Dove mangiamo?</h1><p>Scegli due o tre locali e manda il voto nel gruppo.</p>
-<div id="picker"><label for="city">Città</label><select id="city"></select><div id="choices"></div></div><div id="draft"></div>
+<section id="setup" hidden><h1>Dove mangiamo?</h1><p>Cerca due o tre locali, ovunque in Italia, e manda il voto nel gruppo.</p>
+<div id="picker"><label for="place">Dove?</label><input id="place" placeholder="Città o paese, in tutta Italia" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="places" aria-expanded="false"><ul id="places" role="listbox" hidden></ul>
+<div id="venueBox" hidden><label for="query">Locale</label><input id="query" type="search" autocomplete="off" placeholder="Nome, via o tipo di locale"><p id="hint" class="tiny meta" aria-live="polite"></p><div id="choices"></div></div></div>
+<p class="tiny meta" id="draftLabel" hidden>Scelti:</p><ul id="draft"></ul>
 <button id="create">Crea la votazione</button></section>
 <section id="room" hidden><h1 id="title">Dove mangiamo?</h1><p id="summary" aria-live="polite"></p><div id="options"></div>
 <p id="until"></p><div class="actions"><button id="copy">Copia link</button><a id="whatsapp" class="secondary" rel="noopener noreferrer" target="_blank">Invita su WhatsApp</a></div>

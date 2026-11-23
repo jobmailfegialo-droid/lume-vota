@@ -8,35 +8,64 @@ on:
         default: diretti
         type: choice
         options: [diretti, siti, tutti]
+  workflow_call:
+    inputs:
+      mode:
+        description: Fonti da controllare (diretti, siti, tutti)
+        required: false
+        default: diretti
+        type: string
   push:
     paths: ['.github/workflows/raccolta-menu.yml']
 permissions:
   contents: read
 concurrency:
-  group: raccolta-menu-${{ inputs.mode || 'diretti' }}
+  # Chiamata da un altro workflow: gruppo legato al run, così non blocca il chiamante.
+  group: ${{ github.workflow == 'Raccolta menu Italia' && format('raccolta-menu-{0}-{1}', inputs.mode || 'diretti', github.ref_name) || format('raccolta-menu-annidata-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   raccolta:
+    name: ${{ matrix.regione }}
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 170
     strategy:
       fail-fast: false
-      max-parallel: 12
+      max-parallel: 10
       matrix:
-        part: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        include:
+          - {regione: "Lombardia", slug: lombardia}
+          - {regione: "Veneto", slug: veneto}
+          - {regione: "Lazio", slug: lazio}
+          - {regione: "Emilia-Romagna", slug: emilia-romagna}
+          - {regione: "Trentino-Alto Adige", slug: trentino-alto-adige}
+          - {regione: "Piemonte", slug: piemonte}
+          - {regione: "Toscana", slug: toscana}
+          - {regione: "Campania", slug: campania}
+          - {regione: "Sicilia", slug: sicilia}
+          - {regione: "Friuli-Venezia Giulia", slug: friuli-venezia-giulia}
+          - {regione: "Puglia", slug: puglia}
+          - {regione: "Marche", slug: marche}
+          - {regione: "Liguria", slug: liguria}
+          - {regione: "Sardegna", slug: sardegna}
+          - {regione: "Abruzzo", slug: abruzzo}
+          - {regione: "Umbria", slug: umbria}
+          - {regione: "Calabria", slug: calabria}
+          - {regione: "Valle d'Aosta", slug: valle-d-aosta}
+          - {regione: "Basilicata", slug: basilicata}
+          - {regione: "Molise", slug: molise}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Controlla le fonti pubbliche
+      - name: Controlla le fonti pubbliche della regione
         env:
-          PART: ${{ matrix.part }}
           MODE: ${{ inputs.mode || 'diretti' }}
-        run: python3 raccogli_menu.py --mode "$MODE" --parts 12 --part "$PART" --workers 8 --output raccolta
+          REGIONE: ${{ matrix.regione }}
+        run: python3 raccogli_menu.py --mode "$MODE" --regione "$REGIONE" --workers 12 --output raccolta
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fonti-${{ matrix.part }}
+          name: fonti-${{ matrix.slug }}
           path: raccolta/
           retention-days: 5
   totale:
@@ -44,6 +73,9 @@ jobs:
     needs: raccolta
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           pattern: fonti-*
@@ -61,14 +93,18 @@ jobs:
           out.mkdir()
           (out/'totali.json').write_text(json.dumps({'partizioni':len(parts),**totals},indent=2))
           with (out/'esiti.ndjson').open('wb') as w:
-              for f in root.glob('*/esiti.ndjson'): w.write(f.read_bytes())
+              for f in sorted(root.glob('*/esiti.ndjson')): w.write(f.read_bytes())
           for lic in root.glob('*/LICENSE-OSM.md'):
               (out/lic.name).write_bytes(lic.read_bytes()); break
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as s:
-              print('### Risultati nazionali\n\nPartizioni completate:',len(parts),'di 12\n\n|Esito|Numero|\n|---|---:|',file=s)
+              print('### Risultati nazionali\n\nRegioni completate:',len(parts),'di 20\n\n|Esito|Numero|\n|---|---:|',file=s)
               for k,v in totals.items(): print(f'|{k}|{v}|',file=s)
           print(dict(totals))
           PY
+      - name: Misura la copertura dei capoluoghi
+        run: |
+          python3 copertura.py catalogo-raccolto/esiti.ndjson --output catalogo-raccolto
+          cat catalogo-raccolto/copertura.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: raccolta-menu-italia
