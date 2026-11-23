@@ -186,8 +186,9 @@ def verified_proposals(verified, taken_urls, taken_ids, skipped):
         if not isinstance(v, dict) or v.get("id") in taken_ids or v.get("id") in seen:
             continue
         if norm_url(v.get("source")) in taken_urls:
-            skipped["fonte già pubblicata"] += 1
+            skipped["fonte già pubblicata o condivisa da più sedi"] += 1
             continue
+        taken_urls = taken_urls | {norm_url(v.get("source"))}
         dishes = [{"name": d["name"].strip(), "cents": d["cents"]} for d in v.get("dishes", [])
                   if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"].strip()
                   and isinstance(d.get("cents"), int) and not isinstance(d["cents"], bool) and MIN_CENTS <= d["cents"] <= MAX_CENTS]
