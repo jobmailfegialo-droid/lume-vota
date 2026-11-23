@@ -1,0 +1,45 @@
+name: Leggi PDF e foto dei menu
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: ID della raccolta da cui leggere i documenti
+        required: true
+        default: '45085708018'
+  push:
+    paths: ['.github/workflows/documenti-menu.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  lettura:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fonti-*
+          path: fonti
+          run-id: ${{ inputs.run_id || '45085708018' }}
+          github-token: ${{ github.token }}
+      - name: Prepara lettura PDF e OCR italiano
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-ita tesseract-ocr-eng
+      - name: Leggi prezzi affiancati sulla stessa riga
+        env:
+          PART: ${{ matrix.part }}
+        run: python3 leggi_menu_documenti.py fonti risultati --parts 4 --part "$PART"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: documenti-${{ matrix.part }}
+          path: risultati
+          retention-days: 7
