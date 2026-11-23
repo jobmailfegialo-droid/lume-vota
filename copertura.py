@@ -16,6 +16,7 @@ def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("esiti", nargs="*", type=Path)
     cli.add_argument("--output", type=Path, default=Path("copertura"))
+    cli.add_argument("--verificati", type=Path, help="prezzi-verificati.json di verifica_prezzi.py: contano come verificati")
     args = cli.parse_args()
     province = json.loads((ROOT / "dati" / "territorio.json").read_text())["province"]
     capoluogo = {chiave(p["capoluogo"]): sigla for sigla, p in province.items()}
@@ -25,6 +26,11 @@ def main():
         if not v.get("dishes"): continue
         sigla = capoluogo.get(chiave(v.get("city")))
         if sigla: verificati[sigla].add(chiave(v["name"]))
+    if args.verificati and args.verificati.exists():
+        for v in json.loads(args.verificati.read_text())["venues"]:
+            sigla = v.get("provincia")
+            if sigla in province and chiave(v.get("city")) == chiave(province[sigla]["capoluogo"]):
+                verificati[sigla].add(chiave(v["name"]))
     righe = 0
     for path in args.esiti:
         for line in path.read_text().splitlines():

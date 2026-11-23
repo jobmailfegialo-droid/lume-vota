@@ -8,6 +8,12 @@ on:
         default: diretti
         type: choice
         options: [diretti, siti, tutti]
+      capoluoghi:
+        description: Solo i capoluoghi (sotto-obiettivo = solo quelli con meno di 10 menu verificati)
+        required: false
+        default: 'no'
+        type: choice
+        options: ['no', tutti, sotto-obiettivo]
   workflow_call:
     inputs:
       mode:
@@ -15,13 +21,18 @@ on:
         required: false
         default: diretti
         type: string
+      capoluoghi:
+        description: no, tutti o sotto-obiettivo
+        required: false
+        default: 'no'
+        type: string
   push:
     paths: ['.github/workflows/raccolta-menu.yml']
 permissions:
   contents: read
 concurrency:
   # Chiamata da un altro workflow: gruppo legato al run, così non blocca il chiamante.
-  group: ${{ github.workflow == 'Raccolta menu Italia' && format('raccolta-menu-{0}-{1}', inputs.mode || 'diretti', github.ref_name) || format('raccolta-menu-annidata-{0}', github.run_id) }}
+  group: ${{ github.workflow == 'Raccolta menu Italia' && format('raccolta-menu-{0}-{1}-{2}', inputs.mode || 'diretti', inputs.capoluoghi || 'no', github.ref_name) || format('raccolta-menu-annidata-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   raccolta:
@@ -61,7 +72,14 @@ jobs:
         env:
           MODE: ${{ inputs.mode || 'diretti' }}
           REGIONE: ${{ matrix.regione }}
-        run: python3 raccogli_menu.py --mode "$MODE" --regione "$REGIONE" --workers 12 --output raccolta
+          CAPOLUOGHI: ${{ inputs.capoluoghi || 'no' }}
+        run: |
+          case "$CAPOLUOGHI" in
+            tutti) FILTRO=(--capoluoghi tutti) ;;
+            sotto-obiettivo) python3 copertura.py --output obiettivo >/dev/null; FILTRO=(--capoluoghi obiettivo/copertura.json) ;;
+            *) FILTRO=() ;;
+          esac
+          python3 raccogli_menu.py --mode "$MODE" --regione "$REGIONE" "${FILTRO[@]}" --workers 12 --output raccolta
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -101,9 +119,10 @@ jobs:
               for k,v in totals.items(): print(f'|{k}|{v}|',file=s)
           print(dict(totals))
           PY
-      - name: Misura la copertura dei capoluoghi
+      - name: Verifica i prezzi e misura la copertura dei capoluoghi
         run: |
-          python3 copertura.py catalogo-raccolto/esiti.ndjson --output catalogo-raccolto
+          python3 verifica_prezzi.py catalogo-raccolto/esiti.ndjson --campione 0 --output catalogo-raccolto
+          python3 copertura.py catalogo-raccolto/esiti.ndjson --verificati catalogo-raccolto/prezzi-verificati.json --output catalogo-raccolto
           tee -a "$GITHUB_STEP_SUMMARY" < catalogo-raccolto/copertura.md
       - uses: actions/upload-artifact@v4
         with:
