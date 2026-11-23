@@ -81,17 +81,26 @@ jobs:
                   'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['ANON'], 'apikey': os.environ['ANON']})
               return json.load(urllib.request.urlopen(req, timeout=150))
           prova = os.environ['FASE'] == 'prova'
-          errori = 0
-          for giro in range(1 if prova else 400):
+          errori, attesa, fermo_da = 0, 20, None
+          inizio = time.time()
+          for giro in range(1 if prova else 2000):
+              if time.time() - inizio > 3.5 * 3600: print('Tempo finito: continuo con i siti trovati'); break
               try:
-                  r = chiama({'token': os.environ['TOKEN'], 'limite': 20 if prova else 50})
+                  r = chiama({'token': os.environ['TOKEN'], 'limite': 20 if prova else 30})
               except urllib.error.URLError as e:
                   errori += 1; print('errore', e); time.sleep(10)
-                  if errori > 5: raise
+                  if errori > 10: break
                   continue
               print(giro, r, flush=True)
-              if r.get('esiti', {}).get('errore', 0) > r.get('elaborati', 0) / 2: raise SystemExit('Troppi errori da Google: mi fermo')
+              if r.get('limite_google'):
+                  # Google rallenta: aspetto sempre di più; dopo 45 minuti fermo è un limite giornaliero.
+                  fermo_da = fermo_da or time.time()
+                  if time.time() - fermo_da > 45 * 60: print('Google non riprende: continuo con i siti trovati'); break
+                  attesa = min(attesa * 2, 300); time.sleep(attesa); continue
+              fermo_da, attesa = None, max(20, attesa // 2)
+              if r.get('esiti', {}).get('errore', 0) > max(1, r.get('elaborati', 0)) / 2: print('Troppi errori da Google: mi fermo'); break
               if not r.get('altri_in_attesa') or not r.get('elaborati'): break
+              time.sleep(attesa)
           s = chiama({'azione': 'stato'}); print(s)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               print('### Ricerca siti con Google Places\n\n|Esito|Locali|\n|---|---:|', file=f)
