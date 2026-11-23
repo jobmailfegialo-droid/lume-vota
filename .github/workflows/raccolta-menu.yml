@@ -104,7 +104,7 @@ jobs:
       - name: Misura la copertura dei capoluoghi
         run: |
           python3 copertura.py catalogo-raccolto/esiti.ndjson --output catalogo-raccolto
-          cat catalogo-raccolto/copertura.md >> "$GITHUB_STEP_SUMMARY"
+          tee -a "$GITHUB_STEP_SUMMARY" < catalogo-raccolto/copertura.md
       - uses: actions/upload-artifact@v4
         with:
           name: raccolta-menu-italia
