@@ -1,0 +1,88 @@
+name: Prezzi della settimana
+# Ogni lunedì notte: raccoglie i menu in tutta Italia, legge PDF e foto,
+# aggiorna menus.json con controlli sui prezzi anomali e apre una PR da rivedere.
+# Niente va online finché la PR non viene unita (GitHub Pages pubblica da main).
+on:
+  schedule:
+    - cron: '17 2 * * 1'  # lunedì 03:17 ora italiana (04:17 con l'ora legale)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Fonti da controllare
+        required: true
+        default: diretti
+        type: choice
+        options: [diretti, siti, tutti]
+      nuovi:
+        description: Massimo di locali nuovi da proporre
+        required: true
+        default: '300'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: prezzi-settimanali
+  cancel-in-progress: false
+jobs:
+  raccolta:
+    uses: ./.github/workflows/raccolta-menu.yml
+    with:
+      mode: ${{ inputs.mode || 'diretti' }}
+  documenti:
+    needs: raccolta
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/documenti-menu.yml
+    with:
+      run_id: ${{ github.run_id }}
+  pubblica:
+    needs: [raccolta, documenti]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: fonti-*
+          path: risultati
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: documenti-*
+          path: risultati
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: raccolta-menu-italia
+          path: risultati/raccolta-menu-italia
+      - name: Aggiorna menus.json con i controlli
+        id: aggiorna
+        run: |
+          python3 aggiorna_menus.py risultati --new-limit "${NUOVI:-300}" --report riassunto-prezzi.md
+          cat riassunto-prezzi.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          NUOVI: ${{ inputs.nuovi }}
+      - name: Apri la PR della settimana
+        if: steps.aggiorna.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ steps.aggiorna.outputs.revision }}
+        run: |
+          branch="prezzi/$(date -u +%Y-%m-%d)-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add menus.json
+          git commit -q -m "Prezzi della settimana (revisione $REVISION)"
+          git push -q origin "$branch"
+          old=$(gh pr list --state open --json number,headRefName --jq '.[]|select(.headRefName|startswith("prezzi/"))|.number')
+          url=$(gh pr create --base main --head "$branch" \
+            --title "Prezzi della settimana $(date -u +%d/%m/%Y)" --body-file riassunto-prezzi.md)
+          echo "PR aperta: $url" >> "$GITHUB_STEP_SUMMARY"
+          for n in $old; do
+            gh pr close "$n" --delete-branch --comment "Sostituita dalla raccolta più recente: $url"
+          done
