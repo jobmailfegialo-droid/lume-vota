@@ -35,6 +35,22 @@ NEW_MIN_DISHES, NEW_MAX_DISHES = 8, 150
 NEW_PER_CITY = 10  # basta una settimana per portare un capoluogo a 10 locali con menu
 
 
+def tidy_dish(text):
+    """Ripulisce il nome di un piatto letto da un menu; stringa vuota se sembra un errore di lettura."""
+    name = " ".join(str(text or "").split())
+    name = re.sub(r"[.…_·\-–—]{3,}", " ", name)  # puntini di guida verso il prezzo
+    name = re.sub(r"\((?:allergeni|allergens?)[^)]*\)", " ", name, flags=re.I)
+    name = re.split(r"\s\|\s", name)[0]  # "Polenta ai ferri | Grilled polenta" -> prima lingua
+    name = re.sub(r"^(?:n\.?\s*)?\d{1,3}(?:\.\d{1,2})?[\s.)\-–]+(?=\D)", "", name)  # numerazione "54 ", "4.1 "
+    name = re.sub(r"[\s*°+|/:,;\-–—]+$", "", name).strip(" *°+|-–—")
+    if (not 3 <= len(name) <= 80 or not re.search(r"[A-Za-zÀ-ÿ]{3}", name)
+            or re.search(r"\d+[.,]\d{2}\b|€", name)  # un altro prezzo nella stessa riga
+            or re.search(r"(?:\b\w\s){4,}", name)  # lettere spaziate "B R A N C A"
+            or re.search(r"\b\d+\s*(?:cl|ml|lt?|pz)\b", name, re.I) and len(name) < 14):
+        return ""
+    return name
+
+
 def norm_name(text):
     text = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text.casefold()).split())
@@ -189,8 +205,8 @@ def verified_proposals(verified, taken_urls, taken_ids, skipped):
             skipped["fonte già pubblicata o condivisa da più sedi"] += 1
             continue
         taken_urls = taken_urls | {norm_url(v.get("source"))}
-        dishes = [{"name": d["name"].strip(), "cents": d["cents"]} for d in v.get("dishes", [])
-                  if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"].strip()
+        dishes = [{"name": tidy_dish(d["name"]), "cents": d["cents"]} for d in v.get("dishes", [])
+                  if isinstance(d, dict) and isinstance(d.get("name"), str) and tidy_dish(d["name"])
                   and isinstance(d.get("cents"), int) and not isinstance(d["cents"], bool) and MIN_CENTS <= d["cents"] <= MAX_CENTS]
         if not (v.get("name") and v.get("city") and https(v.get("source")) and dishes):
             skipped["verificato ma incompleto (nome, città, fonte https o piatti)"] += 1
@@ -231,11 +247,12 @@ def new_venues(sources, existing, rows, places, today, limit, verified=None):
         by_name = defaultdict(set)
         label = {}
         for i in src["items"]:
-            if i.get("method") in TRUSTED and MIN_CENTS <= i["cents"] <= MAX_CENTS:
-                n = norm_name(i["name"])
+            name = tidy_dish(i["name"])
+            if name and i.get("method") in TRUSTED and MIN_CENTS <= i["cents"] <= MAX_CENTS:
+                n = norm_name(name)
                 if len(n) >= 3:
                     by_name[n].add(i["cents"])
-                    label.setdefault(n, i["name"].strip())
+                    label.setdefault(n, name)
         dishes = [{"name": label[n], "cents": next(iter(p))} for n, p in by_name.items() if len(p) == 1]
         if len(dishes) < NEW_MIN_DISHES:
             skipped["meno di %d piatti sicuri" % NEW_MIN_DISHES] += 1
