@@ -232,7 +232,8 @@ def read_page(fetch,url,is_menu):
 
 def collect(seed,policy):
     direct,site=seed["menu"],seed["site"]
-    result={"id":seed["id"],"name":seed["name"],"city":seed["city"],"kind":seed["kind"],"pages":[]}
+    result={"id":seed["id"],"name":seed["name"],"city":seed["city"],"kind":seed["kind"],
+            "localita":seed["localita"],"provincia":seed["provincia"],"regione":seed["regione"],"pages":[]}
     try:
         start=direct or site
         page,links=read_page(policy.fetch,start,bool(direct))
@@ -248,26 +249,27 @@ def collect(seed,policy):
         result["status"]="http_"+str(err.code) if isinstance(err,HTTPError) else "non_accessibile"
     return result
 
-def seeds(archive,mode):
-    with ZipFile(archive) as z:cells=json.loads(z.read("cells.json"))
-    for block in cells.values():
-        for line in block.splitlines():
-            if not line:continue
-            r=(line.split("\t")+[""]*13)[:13]
-            menu,site=public_url(r[12]),public_url(r[9])
-            if (mode=="diretti" and not menu) or (mode=="siti" and (menu or not site)) or not(menu or site):continue
-            yield {"id":r[0],"name":r[3],"kind":r[4],"city":r[6],"menu":menu,"site":site}
+def seeds(archive,mode,regione=None):
+    from geografia import Territorio,righe
+    territorio=Territorio(archive)
+    for r in righe(archive):
+        menu,site=public_url(r[12]),public_url(r[9])
+        if (mode=="diretti" and not menu) or (mode=="siti" and (menu or not site)) or not(menu or site):continue
+        localita,provincia,reg=territorio.luogo(r)
+        if regione and reg!=regione:continue
+        yield {"id":r[0],"name":r[3],"kind":r[4],"city":r[6] or localita,"localita":localita,"provincia":provincia,"regione":reg,"menu":menu,"site":site}
 
 def main():
     cli=argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--dataset",default="dati-italia.zip")
     cli.add_argument("--mode",choices=["diretti","siti","tutti"],default="diretti")
     cli.add_argument("--parts",type=int,default=1);cli.add_argument("--part",type=int,default=0)
+    cli.add_argument("--regione",help="Solo i locali di questa regione, es. Lombardia")
     cli.add_argument("--workers",type=int,default=6);cli.add_argument("--limit",type=int)
     cli.add_argument("--output",type=Path,default=Path("raccolta"))
     args=cli.parse_args()
     if not 1<=args.workers<=12 or not 0<=args.part<args.parts:cli.error("Partizione o concorrenza non valida")
-    queue=[r for r in seeds(args.dataset,args.mode) if int(hashlib.sha256(domain(r["menu"] or r["site"]).encode()).hexdigest(),16)%args.parts==args.part]
+    queue=[r for r in seeds(args.dataset,args.mode,args.regione) if int(hashlib.sha256(domain(r["menu"] or r["site"]).encode()).hexdigest(),16)%args.parts==args.part]
     queue.sort(key=lambda x:(not x["menu"],x["kind"]!="restaurant",x["id"]))
     if args.limit is not None:queue=queue[:args.limit]
     args.output.mkdir(exist_ok=True,parents=True);counts=Counter();policy=HostPolicy()
@@ -279,9 +281,9 @@ def main():
         for i,task in enumerate(as_completed(tasks),1):
             group=tasks[task]
             try: row=task.result()
-            except Exception as e:row={"id":group[0]["id"],"status":"errore_lettura","pages":[],"reason":type(e).__name__}
+            except Exception as e:row={**{k:group[0][k] for k in ("id","name","city","kind","localita","provincia","regione")},"status":"errore_lettura","pages":[],"reason":type(e).__name__}
             if len(group)>1:
-                row["altre_sedi"]=[{"id":r["id"],"name":r["name"],"city":r["city"]} for r in group[1:]]
+                row["altre_sedi"]=[{k:r[k] for k in ("id","name","city","localita","provincia")} for r in group[1:]]
                 row["fonte_condivisa"]=True
             row["checkedOn"]=date
             print(json.dumps(row,ensure_ascii=False),file=file,flush=True)
@@ -295,5 +297,5 @@ def main():
         (args.output/"LICENSE-OSM.md").write_bytes(archive.read("LICENSE.md"))
     print("RISULTATO",json.dumps(counts),flush=True)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
-        with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as summary:print("### Partizione",args.part,"\n\n|Esito|Numero|\n|---|---:|",file=summary);print("\n".join(f"|{k}|{v}|" for k,v in counts.items()),file=summary)
+        with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as summary:print("### "+(args.regione or "Partizione "+str(args.part)),"\n\n|Esito|Numero|\n|---|---:|",file=summary);print("\n".join(f"|{k}|{v}|" for k,v in counts.items()),file=summary)
 if __name__=="__main__":main()
