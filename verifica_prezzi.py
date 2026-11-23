@@ -80,13 +80,24 @@ def punteggio(pagina, tipo):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("esiti", type=Path)
+    cli.add_argument("--documenti", type=Path, nargs="*", default=[], help="documenti.ndjson di leggi_menu_documenti.py (PDF e foto letti con OCR)")
     cli.add_argument("--output", type=Path, default=Path("verifica"))
     cli.add_argument("--campione", type=int, default=25, help="locali da stampare per il controllo a occhio")
     args = cli.parse_args()
     venues, scarti, motivi, fonti = [], [], Counter(), set()
-    for line in args.esiti.read_text().splitlines():
-        if not line.strip(): continue
-        row = json.loads(line)
+    righe = [json.loads(l) for l in args.esiti.read_text().splitlines() if l.strip()]
+    per_id = {r["id"]: r for r in righe}
+    for path in args.documenti:
+        # Ogni PDF o foto letto diventa una pagina in più del locale che lo pubblica.
+        for line in path.read_text().splitlines():
+            if not line.strip(): continue
+            doc = json.loads(line)
+            candidati = [c for p in doc.get("pages", []) for c in p.get("candidates", [])]
+            row = next((per_id[v["id"]] for v in doc.get("venues", []) if v.get("id") in per_id), None)
+            if not candidati or row is None: continue
+            row.setdefault("pages", []).append({"url": doc["url"], "type": "pdf", "candidates": candidati})
+            row["status"] = "prezzi_candidati"
+    for row in righe:
         best, motivo = None, "nessuna pagina con prezzi"
         for pagina in row.get("pages", []):
             if not pagina.get("candidates"): continue
