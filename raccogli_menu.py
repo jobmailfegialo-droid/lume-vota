@@ -124,7 +124,7 @@ class HostPolicy:
 class MenuHTML(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.lines,self.links,self.structured = [],[],[]
+        self.lines,self.links,self.structured,self.images = [],[],[],[]
         self.parts,self.anchor,self.ld = [],None,None
         self.skip = 0
     def flush(self):
@@ -141,7 +141,8 @@ class MenuHTML(HTMLParser):
         if tag=="a":self.anchor=[a.get("href") or "",[]]
         if tag=="img":
             href=a.get("data-src") or a.get("src") or ""
-            if MENU_WORD.search((a.get("alt") or "")+" "+href.replace("-"," ")):self.links.append((href,"menu immagine"))
+            if MENU_WORD.search((a.get("alt") or "")+" "+href.replace("-"," ")):self.links.append((href,"menu immagine"));self.images.insert(0,href)
+            elif href and not IMMAGINE_INUTILE.search(href+" "+(a.get("alt") or "")):self.images.append(href)
     def handle_data(self,text):
         if self.ld is not None: self.ld.append(text)
         if self.skip:return
@@ -219,6 +220,18 @@ def menu_links(page,base):
         ranked[url]=max(score,ranked.get(url,0))
     return sorted(ranked,key=lambda k:(-ranked[k],len(k)))[:3]
 
+IMMAGINE_INUTILE=re.compile(r"logo|icon|favicon|sprite|banner|avatar|placeholder|loader|flag|bandiera|social|facebook|instagram|tripadvisor|whatsapp|\.svg|\.gif|data:",re.I)
+
+def immagini_menu(page,base):
+    """Su una pagina menu senza prezzi leggibili, le immagini grandi sono spesso il menu fotografato: le passo all'OCR."""
+    out=[]
+    for href in page.images:
+        url=public_url(urljoin(base,href))
+        piccola=re.search(r"-(\d{2,4})x(\d{2,4})\.(?:jpe?g|png|webp)",url or "",re.I)
+        if piccola and max(int(piccola[1]),int(piccola[2]))<500:continue  # miniature di WordPress
+        if url and re.search(r"\.(jpe?g|png|webp)(\?|$)",url,re.I) and url not in out:out.append(url)
+    return out[:4]
+
 def read_page(fetch,url,is_menu):
     final,kind,encoding,body=fetch(url)
     entry={"url":final,"type":kind,"candidates":[]}
@@ -235,6 +248,7 @@ def read_page(fetch,url,is_menu):
     except LookupError:html=body.decode("utf-8",errors="replace")
     page=MenuHTML();page.feed(html);page.flush()
     entry["candidates"]=extract_prices(page.lines if is_menu else [],page.structured)
+    if is_menu and not entry["candidates"]:entry["immagini"]=immagini_menu(page,final)
     return entry,menu_links(page,final)
 
 def collect(seed,policy):
@@ -260,8 +274,13 @@ def collect(seed,policy):
                 try:
                     child,_=read_page(policy.fetch,url,True)
                 except (ValueError,OSError,subprocess.TimeoutExpired):continue
-                if child and (child["candidates"] or child["type"]=="pdf"):
+                if child and (child["candidates"] or child["type"]=="pdf" or child.get("immagini")):
                     result["pages"].append(child);break
+        if not any(p["candidates"] for p in result["pages"]):
+            # Menu solo in foto: ogni immagine diventa una fonte da leggere con l'OCR (leggi_menu_documenti.py).
+            foto=[u for p in result["pages"] for u in p.pop("immagini",[])]
+            result["pages"]+=[{"url":u,"type":"image/foto-menu","candidates":[]} for u in dict.fromkeys(foto)][:6]
+        for p in result["pages"]:p.pop("immagini",None)
         result["status"]="prezzi_candidati" if any(p["candidates"] for p in result["pages"]) else "fonte_da_verificare" if result["pages"] else "nessun_menu"
     except (ValueError,OSError,subprocess.TimeoutExpired) as err:
         result["status"]="http_"+str(err.code) if isinstance(err,HTTPError) else "non_accessibile"
