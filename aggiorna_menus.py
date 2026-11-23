@@ -32,7 +32,7 @@ MIN_CENTS, MAX_CENTS = 100, 15000
 MAX_RATIO = 1.6  # oltre +60% o sotto -37,5% il cambio è un'anomalia
 MASSIVE_SHARE = 0.30  # se cambia più del 30% dei prezzi confrontati, non si applica nulla
 NEW_MIN_DISHES, NEW_MAX_DISHES = 8, 150
-NEW_PER_CITY = 5
+NEW_PER_CITY = 10  # basta una settimana per portare un capoluogo a 10 locali con menu
 
 
 def norm_name(text):
