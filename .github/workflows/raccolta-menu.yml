@@ -101,9 +101,10 @@ jobs:
               for k,v in totals.items(): print(f'|{k}|{v}|',file=s)
           print(dict(totals))
           PY
-      - name: Misura la copertura dei capoluoghi
+      - name: Verifica i prezzi e misura la copertura dei capoluoghi
         run: |
-          python3 copertura.py catalogo-raccolto/esiti.ndjson --output catalogo-raccolto
+          python3 verifica_prezzi.py catalogo-raccolto/esiti.ndjson --campione 0 --output catalogo-raccolto
+          python3 copertura.py catalogo-raccolto/esiti.ndjson --verificati catalogo-raccolto/prezzi-verificati.json --output catalogo-raccolto
           tee -a "$GITHUB_STEP_SUMMARY" < catalogo-raccolto/copertura.md
       - uses: actions/upload-artifact@v4
         with:

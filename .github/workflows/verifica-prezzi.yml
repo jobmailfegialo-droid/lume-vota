@@ -1,0 +1,38 @@
+name: Verifica prezzi
+# Verifica automatica dei prezzi di una raccolta già fatta, senza rifare la raccolta.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: ID del run di "Raccolta menu Italia" da verificare
+        required: true
+        default: '45262808608'
+  push:
+    paths: ['.github/workflows/verifica-prezzi.yml', 'verifica_prezzi.py']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verifica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: raccolta-menu-italia
+          path: raccolta
+          run-id: ${{ inputs.run_id || '45262808608' }}
+          github-token: ${{ github.token }}
+      - name: Verifica e misura la copertura
+        run: |
+          python3 verifica_prezzi.py raccolta/esiti.ndjson --output verifica
+          python3 copertura.py raccolta/esiti.ndjson --verificati verifica/prezzi-verificati.json --output verifica
+          tee -a "$GITHUB_STEP_SUMMARY" < verifica/copertura.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prezzi-verificati
+          path: verifica/
+          retention-days: 14
