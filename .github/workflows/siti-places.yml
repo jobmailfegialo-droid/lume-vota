@@ -18,6 +18,11 @@ on:
         description: ID di un run di "Verifica prezzi" per scegliere solo i capoluoghi sotto obiettivo (vuoto = tutti)
         required: false
         default: ''
+  workflow_call:
+    inputs:
+      token: {type: string, required: true}
+      fase: {type: string, required: false, default: prova}
+      verifica_run_id: {type: string, required: false, default: ''}
 permissions:
   contents: read
   actions: read

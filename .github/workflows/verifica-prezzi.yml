@@ -15,13 +15,29 @@ on:
         description: ID del run di "Siti dei locali da Google Places" da aggiungere (vuoto se non c'è)
         required: false
         default: ''
+      places_token:
+        description: Solo per la ricerca siti con Google Places (avvia quella al posto della verifica)
+        required: false
+        default: ''
+      places_fase:
+        description: prova o tutto (solo con places_token)
+        required: false
+        default: prova
   push:
     paths: ['.github/workflows/verifica-prezzi.yml', 'verifica_prezzi.py']
 permissions:
   contents: read
   actions: read
 jobs:
+  places:
+    if: inputs.places_token != ''
+    uses: ./.github/workflows/siti-places.yml
+    with:
+      token: ${{ inputs.places_token }}
+      fase: ${{ inputs.places_fase }}
+      verifica_run_id: ''
   verifica:
+    if: inputs.places_token == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
