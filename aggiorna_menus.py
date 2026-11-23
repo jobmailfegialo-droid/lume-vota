@@ -37,13 +37,14 @@ NEW_PER_CITY = 10  # basta una settimana per portare un capoluogo a 10 locali co
 
 def tidy_dish(text):
     """Ripulisce il nome di un piatto letto da un menu; stringa vuota se sembra un errore di lettura."""
-    name = " ".join(str(text or "").split())
+    name = " ".join("".join(c for c in str(text or "") if c.isprintable() and c != "\x80").split())
     name = re.sub(r"[.…_·\-–—]{3,}", " ", name)  # puntini di guida verso il prezzo
     name = re.sub(r"\((?:allergeni|allergens?)[^)]*\)", " ", name, flags=re.I)
     name = re.split(r"\s\|\s", name)[0]  # "Polenta ai ferri | Grilled polenta" -> prima lingua
     name = re.sub(r"^(?:n\.?\s*)?\d{1,3}(?:\.\d{1,2})?[\s.)\-–]+(?=\D)", "", name)  # numerazione "54 ", "4.1 "
     name = re.sub(r"[\s*°+|/:,;\-–—]+$", "", name).strip(" *°+|-–—")
-    if (not 3 <= len(name) <= 80 or not re.search(r"[A-Za-zÀ-ÿ]{3}", name)
+    name = re.sub(r"(?:[\s*,]+\d{1,2}(?:\s*[,\-]\s*\d{1,2})*\s*[*,]?)+$", "", name).strip(" *,|")  # codici allergeni finali
+    if (not 3 <= len(name) <= 120 or not re.search(r"[A-Za-zÀ-ÿ]{3}", name)
             or re.search(r"\d+[.,]\d{2}\b|€", name)  # un altro prezzo nella stessa riga
             or re.search(r"(?:\b\w\s){4,}", name)  # lettere spaziate "B R A N C A"
             or re.search(r"\b\d+\s*(?:cl|ml|lt?|pz)\b", name, re.I) and len(name) < 14):
