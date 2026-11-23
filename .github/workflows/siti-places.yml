@@ -1,0 +1,112 @@
+name: Siti dei locali da Google Places
+# Una tantum: cerca con Google Places il sito dei ristoranti senza sito in OSM nei capoluoghi
+# sotto obiettivo, poi ne legge i menu. La ricerca gira nella funzione Supabase lume-siti,
+# che ha un tetto di ricerche: il token serve solo per questo giro e viene annullato dopo.
+on:
+  workflow_dispatch:
+    inputs:
+      token:
+        description: Token del giro (dato da chi avvia, annullato a fine giro)
+        required: true
+      fase:
+        description: prova = 20 ricerche e basta; tutto = ricerca completa, raccolta menu e verifica
+        required: true
+        default: prova
+        type: choice
+        options: [prova, tutto]
+      verifica_run_id:
+        description: ID di un run di "Verifica prezzi" per scegliere solo i capoluoghi sotto obiettivo (vuoto = tutti)
+        required: false
+        default: ''
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: siti-places
+  cancel-in-progress: false
+jobs:
+  siti:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      FUNZIONE: https://ubalduqlnkubddemkmtz.supabase.co/functions/v1/lume-siti
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Nasconde il token nei log
+        env:
+          TOKEN: ${{ inputs.token }}
+        run: |
+          echo "::add-mask::$TOKEN"
+          echo "ANON=$(grep -o 'eyJhbGciOi[A-Za-z0-9._-]*' catalogo.js | head -1)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        if: inputs.verifica_run_id != ''
+        with:
+          name: prezzi-verificati
+          path: verifica
+          run-id: ${{ inputs.verifica_run_id }}
+          github-token: ${{ github.token }}
+      - name: Mette in coda i locali
+        env:
+          TOKEN: ${{ inputs.token }}
+        run: |
+          if [ -f verifica/copertura.json ]; then COP=(--copertura verifica/copertura.json); else COP=(); fi
+          python3 strumenti/coda_places.py "${COP[@]}" > coda.json
+          python3 - <<'PY'
+          import json, os, urllib.request
+          coda = json.load(open('coda.json'))
+          def chiama(body):
+              req = urllib.request.Request(os.environ['FUNZIONE'], json.dumps(body).encode(), {
+                  'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['ANON'], 'apikey': os.environ['ANON']})
+              return json.load(urllib.request.urlopen(req, timeout=120))
+          for i in range(0, len(coda), 1500):
+              print(chiama({'azione': 'carica', 'token': os.environ['TOKEN'], 'righe': coda[i:i + 1500]}))
+          print(chiama({'azione': 'stato'}))
+          PY
+      - name: Cerca i siti
+        env:
+          TOKEN: ${{ inputs.token }}
+          FASE: ${{ inputs.fase }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          def chiama(body):
+              req = urllib.request.Request(os.environ['FUNZIONE'], json.dumps(body).encode(), {
+                  'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['ANON'], 'apikey': os.environ['ANON']})
+              return json.load(urllib.request.urlopen(req, timeout=150))
+          prova = os.environ['FASE'] == 'prova'
+          errori = 0
+          for giro in range(1 if prova else 400):
+              try:
+                  r = chiama({'token': os.environ['TOKEN'], 'limite': 20 if prova else 50})
+              except urllib.error.URLError as e:
+                  errori += 1; print('errore', e); time.sleep(10)
+                  if errori > 5: raise
+                  continue
+              print(giro, r, flush=True)
+              if r.get('esiti', {}).get('errore', 0) > r.get('elaborati', 0) / 2: raise SystemExit('Troppi errori da Google: mi fermo')
+              if not r.get('altri_in_attesa') or not r.get('elaborati'): break
+          s = chiama({'azione': 'stato'}); print(s)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              print('### Ricerca siti con Google Places\n\n|Esito|Locali|\n|---|---:|', file=f)
+              for k, v in sorted(s['conteggio'].items()): print(f'|{k}|{v}|', file=f)
+              print(f"\nRicerche usate: {s['ricerche_fatte']} su {s['massimo_ricerche']}", file=f)
+          lista = chiama({'azione': 'lista', 'token': os.environ['TOKEN']})['siti']
+          json.dump(lista, open('siti-extra.json', 'w'))
+          print(len(lista), 'siti trovati')
+          PY
+      - name: Legge i menu dai siti trovati
+        if: inputs.fase == 'tutto'
+        run: |
+          python3 raccogli_menu.py --mode siti --siti-extra siti-extra.json --solo-extra --workers 12 --output raccolta
+          rm siti-extra.json
+          python3 verifica_prezzi.py raccolta/esiti.ndjson --campione 10 --output raccolta
+          python3 copertura.py raccolta/esiti.ndjson --verificati raccolta/prezzi-verificati.json --output raccolta
+          tee -a "$GITHUB_STEP_SUMMARY" < raccolta/copertura.md
+      - uses: actions/upload-artifact@v4
+        if: inputs.fase == 'tutto'
+        with:
+          name: fonti-places
+          path: raccolta/
+          retention-days: 14

@@ -267,12 +267,15 @@ def collect(seed,policy):
         result["status"]="http_"+str(err.code) if isinstance(err,HTTPError) else "non_accessibile"
     return result
 
-def seeds(archive,mode,regione=None,capoluoghi=None):
-    """capoluoghi: insieme di sigle di provincia; se dato, solo i locali del capoluogo di quelle province."""
+def seeds(archive,mode,regione=None,capoluoghi=None,siti_extra=None,solo_extra=False):
+    """capoluoghi: insieme di sigle di provincia; se dato, solo i locali del capoluogo di quelle province.
+    siti_extra: {id OSM: sito} trovati altrove (Google Places) per i locali che in OSM non hanno sito."""
     from geografia import Territorio,righe,chiave
     territorio=Territorio(archive)
+    siti_extra=siti_extra or {}
     for r in righe(archive):
-        menu,site=public_url(r[12]),public_url(r[9])
+        if solo_extra and r[0] not in siti_extra:continue
+        menu,site=public_url(r[12]),public_url(r[9]) or public_url(siti_extra.get(r[0],""))
         if (mode=="diretti" and not menu) or (mode=="siti" and (menu or not site)) or not(menu or site):continue
         localita,provincia,reg=territorio.luogo(r)
         if regione and reg!=regione:continue
@@ -287,6 +290,8 @@ def main():
     cli.add_argument("--regione",help="Solo i locali di questa regione, es. Lombardia")
     cli.add_argument("--capoluoghi",help="Solo i capoluoghi: 'tutti', oppure un copertura.json per tenere solo quelli sotto obiettivo")
     cli.add_argument("--senza-percorsi",action="store_true",help="Non provare /menu, /carta e simili sui siti senza link al menu")
+    cli.add_argument("--siti-extra",type=Path,help="JSON [{osm_id, sito}] con i siti trovati per i locali senza sito in OSM")
+    cli.add_argument("--solo-extra",action="store_true",help="Controlla solo i locali di --siti-extra")
     cli.add_argument("--workers",type=int,default=6);cli.add_argument("--limit",type=int)
     cli.add_argument("--output",type=Path,default=Path("raccolta"))
     args=cli.parse_args()
@@ -298,7 +303,10 @@ def main():
         capoluoghi={k for k in json.loads((Path(__file__).resolve().parent/"dati"/"territorio.json").read_text())["province"]}
     elif args.capoluoghi:
         capoluoghi={r["provincia"] for r in json.loads(Path(args.capoluoghi).read_text())["capoluoghi"] if r["mancano"]>0}
-    queue=[r for r in seeds(args.dataset,args.mode,args.regione,capoluoghi) if int(hashlib.sha256(domain(r["menu"] or r["site"]).encode()).hexdigest(),16)%args.parts==args.part]
+    siti_extra=None
+    if args.siti_extra:
+        siti_extra={str(r["osm_id"]).removeprefix("osm-"):r["sito"] for r in json.loads(args.siti_extra.read_text()) if r.get("sito")}
+    queue=[r for r in seeds(args.dataset,args.mode,args.regione,capoluoghi,siti_extra,args.solo_extra) if int(hashlib.sha256(domain(r["menu"] or r["site"]).encode()).hexdigest(),16)%args.parts==args.part]
     queue.sort(key=lambda x:(not x["menu"],x["kind"]!="restaurant",x["id"]))
     if args.limit is not None:queue=queue[:args.limit]
     args.output.mkdir(exist_ok=True,parents=True);counts=Counter();policy=HostPolicy()
