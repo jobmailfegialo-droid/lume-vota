@@ -28,6 +28,7 @@ on:
 permissions:
   contents: read
   actions: read
+  id-token: write
 jobs:
   places:
     if: inputs.places_token != ''
