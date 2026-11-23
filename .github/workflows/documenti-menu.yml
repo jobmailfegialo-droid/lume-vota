@@ -1,5 +1,11 @@
 name: Leggi PDF e foto dei menu
 on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: ID della raccolta da cui leggere i documenti
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       run_id:
