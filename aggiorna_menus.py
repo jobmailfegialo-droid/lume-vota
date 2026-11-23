@@ -168,12 +168,54 @@ def nearest_place(places, lat, lon):
     return best[0]
 
 
-def new_venues(sources, existing, rows, places, today, limit):
+def load_verified(results):
+    """Locali già verificati da verifica_prezzi.py (artifact raccolta-menu-italia), se presenti."""
+    files = sorted(Path(results).rglob("prezzi-verificati.json"))
+    if not files:
+        return None
+    venues = []
+    for f in files:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        venues += data.get("venues", []) if isinstance(data, dict) else data
+    return venues
+
+
+def verified_proposals(verified, taken_urls, taken_ids, skipped):
+    out, seen = [], set()
+    for v in verified:
+        if not isinstance(v, dict) or v.get("id") in taken_ids or v.get("id") in seen:
+            continue
+        if norm_url(v.get("source")) in taken_urls:
+            skipped["fonte già pubblicata"] += 1
+            continue
+        dishes = [{"name": d["name"].strip(), "cents": d["cents"]} for d in v.get("dishes", [])
+                  if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"].strip()
+                  and isinstance(d.get("cents"), int) and not isinstance(d["cents"], bool) and MIN_CENTS <= d["cents"] <= MAX_CENTS]
+        if not (v.get("name") and v.get("city") and https(v.get("source")) and dishes):
+            skipped["verificato ma incompleto (nome, città, fonte https o piatti)"] += 1
+            continue
+        record = {k: v[k] for k in ("id", "name", "city", "street", "phone", "source", "checkedOn") if v.get(k)}
+        try:
+            datetime.strptime(record.get("checkedOn", ""), "%Y-%m-%d")
+        except ValueError:
+            skipped["verificato con data non valida"] += 1
+            continue
+        record["origin"] = "raccolta-automatica"
+        if v.get("verifica"):
+            record["verifica"] = v["verifica"]
+        record["dishes"] = dishes[:NEW_MAX_DISHES]
+        seen.add(record["id"])
+        out.append(record)
+    return out
+
+
+def new_venues(sources, existing, rows, places, today, limit, verified=None):
     taken_urls = {norm_url(v.get(k)) for v in existing for k in ("source", "menuPage")} - {""}
     taken_ids = {v["id"] for v in existing}
     per_city = Counter(v["city"] for v in existing)
     proposals, skipped = [], Counter()
-    for key, src in sources.items():
+    # Se c'è il file di verifica_prezzi.py, i locali nuovi vengono solo da lì.
+    for key, src in (sources.items() if verified is None else []):
         if key in taken_urls or not src["venues"]:
             continue
         if src["shared"]:
@@ -225,6 +267,7 @@ def new_venues(sources, existing, rows, places, today, limit):
         record.update({"source": src["url"], "checkedOn": today, "origin": "raccolta-automatica",
                        "dishes": sorted(dishes, key=lambda d: norm_name(d["name"]))[:NEW_MAX_DISHES]})
         proposals.append(record)
+    proposals = verified_proposals(verified, taken_urls, taken_ids, skipped) if verified is not None else proposals
     # Precedenza alle città con meno locali e tetto per città, così la copertura cresce in tutta Italia.
     proposals.sort(key=lambda v: (per_city[v["city"]], -len(v["dishes"]), v["id"]))
     chosen, added_in_city = [], Counter()
@@ -372,7 +415,8 @@ def main():
     sources = load_sources(args.results)
     changes, anomalies, confirmed, missing, blocked = update_existing(venues, sources, args.today)
     rows, places = dataset_lookup(args.dataset)
-    added, skipped = new_venues(sources, venues, rows, places, args.today, args.new_limit)
+    verified = load_verified(args.results)
+    added, skipped = new_venues(sources, venues, rows, places, args.today, args.new_limit, verified)
     venues.extend(added)
 
     # Anche senza novità, una revisione non più alta di quella dell'app va alzata, altrimenti l'app ignora il file.

@@ -54,6 +54,11 @@ jobs:
         with:
           pattern: documenti-*
           path: risultati
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: raccolta-menu-italia
+          path: risultati/raccolta-menu-italia
       - name: Aggiorna menus.json con i controlli
         id: aggiorna
         run: |
