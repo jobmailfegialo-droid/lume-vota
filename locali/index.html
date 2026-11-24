@@ -1,0 +1,44 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#ffffff">
+<title>Mangiù · Rivendica il tuo locale</title>
+<meta name="description" content="Il tuo locale è già su Mangiù. Rivendicalo gratis per aggiornare menù, prezzi, foto e orari.">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Mangiù"><meta property="og:locale" content="it_IT">
+<meta property="og:title" content="Il tuo locale è già su Mangiù. Rivendicalo gratis">
+<meta property="og:description" content="Aggiorna menù, prezzi, foto e orari e ottieni il segno Verificato. Bastano due minuti, senza scaricare nulla.">
+<meta property="og:url" content="https://jobmailfegialo-droid.github.io/lume-vota/locali/">
+<meta property="og:image" content="https://jobmailfegialo-droid.github.io/lume-vota/anteprima.png">
+<link rel="stylesheet" href="../voto.css?v=6"><link rel="stylesheet" href="locali.css?v=1"><script defer src="locali.js?v=1"></script></head><body>
+<header><a class="logo" href="../app.html">mangi<em>ù</em></a><span>Per i locali</span></header>
+<main>
+<section id="search">
+<h1>Il tuo locale è già su Mangiù</h1>
+<p>Chi cerca dove mangiare vede la scheda del tuo locale, con menù e prezzi. Rivendicala gratis per tenerla aggiornata e avere il segno <b>Verificato</b>.</p>
+<ul class="perks"><li>Aggiorni menù, prezzi, foto e orari</li><li>Segno «Verificato» sulla scheda</li><li>La scheda base resta gratuita, sempre</li></ul>
+<label for="q">Cerca il tuo locale</label>
+<input id="q" type="search" autocomplete="off" placeholder="Nome del locale" disabled>
+<label for="city">Città</label>
+<input id="city" autocomplete="off" placeholder="Es. Milano">
+<p id="status" class="tiny meta" aria-live="polite">Carico l’elenco dei locali…</p>
+<ul id="results" class="results"></ul>
+</section>
+<section id="form" hidden>
+<button id="back" class="quiet" type="button">‹ Cerca un altro locale</button>
+<div class="card venue"><h2 id="vName"></h2><p id="vWhere" class="meta tiny"></p></div>
+<p class="tiny meta">Non è l’indirizzo giusto? Torna indietro e scegli l’altro locale con lo stesso nome.</p>
+<h2>Rivendica questo locale</h2>
+<p class="meta tiny">Ti chiamiamo per verificare che lavori qui. Nessun costo, nessun abbonamento.</p>
+<label for="owner">Nome e cognome</label><input id="owner" autocomplete="name" maxlength="120" placeholder="Es. Giulia Rossi">
+<label>Ruolo nel locale</label><div class="roles" id="roles" role="radiogroup"><button type="button" role="radio" aria-checked="true" data-role="Titolare">Titolare</button><button type="button" role="radio" aria-checked="false" data-role="Gestore">Gestore</button><button type="button" role="radio" aria-checked="false" data-role="Staff">Staff</button></div>
+<label for="phone">Telefono</label><input id="phone" type="tel" autocomplete="tel" maxlength="30" placeholder="Es. 02 1234567">
+<label for="email">Email (facoltativa)</label><input id="email" type="email" autocomplete="email" maxlength="160" placeholder="nome@locale.it">
+<label for="note">Cosa vorresti cambiare (facoltativo)</label><textarea id="note" maxlength="600" rows="3" placeholder="Es. il menù è cambiato, mancano le foto"></textarea>
+<p id="error" class="error" role="alert"></p>
+<button id="send" type="button">Invia la richiesta</button>
+</section>
+<section id="done" hidden>
+<h1>Richiesta ricevuta</h1>
+<p>Grazie. Ti contatteremo al numero indicato per verificare che il locale sia tuo. Dopo la verifica potrai aggiornare menù, prezzi, foto e orari.</p>
+<a class="primary" href="https://apps.apple.com/app/id6766882490" rel="noopener">Vedi Mangiù su App Store</a>
+</section>
+</main>
+<footer><p class="tiny meta">Dati dei locali © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></p></footer>
+</body></html>

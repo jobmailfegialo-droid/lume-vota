@@ -1,0 +1,17 @@
+label{display:block;font-weight:700;font-size:.92rem;margin:14px 0 6px}
+input,textarea{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;background:#fff;color:var(--ink)}
+input:focus,textarea:focus{outline:none;border-color:var(--brand)}
+button,.primary{display:block;width:100%;margin:18px 0 0;padding:14px;border:0;border-radius:14px;background:var(--brand);color:#fff;font:inherit;font-weight:700;font-size:1rem;text-align:center;text-decoration:none;cursor:pointer}
+button:disabled{opacity:.6}
+button.quiet{background:none;color:var(--muted);width:auto;padding:4px 0;margin:0 0 10px;font-weight:600}
+.perks{padding-left:20px;margin:0 0 8px;line-height:1.6}
+.results{list-style:none;padding:0;margin:8px 0 0}
+.results li{margin:0}
+.results button{display:flex;justify-content:space-between;gap:12px;background:#fff;color:var(--ink);border:1.5px solid var(--line);margin:0 0 8px;text-align:left;font-weight:600}
+.results button span{color:var(--muted);font-weight:500;white-space:nowrap}
+.card{border:1.5px solid var(--line);border-radius:18px;padding:14px 16px;margin:0 0 18px;background:var(--brand-soft)}
+.card h2{font-size:1.2rem}.card p{margin:4px 0 0}
+.roles{display:flex;gap:8px}
+.roles button{margin:0;padding:10px;background:#fff;color:var(--ink);border:1.5px solid var(--line);font-weight:600}
+.roles button[aria-checked=true]{border-color:var(--brand);background:var(--brand-soft)}
+.error{color:#b3261e;font-weight:600;min-height:1em;margin:12px 0 0}
