@@ -1,6 +1,6 @@
-# Lume · sito pubblico
+# Mangiù · sito pubblico
 
-Lume aiuta a scegliere dove mangiare in tutta Italia: una guida dei locali (dati OpenStreetMap), menu e prezzi verificati, e un voto di gruppo da mandare su WhatsApp.
+Mangiù aiuta a scegliere dove mangiare in tutta Italia: una guida dei locali (dati OpenStreetMap), menu e prezzi verificati, e un voto di gruppo da mandare su WhatsApp.
 
 Questo repository contiene **solo il sito pubblicato** (GitHub Pages). Il codice sorgente dell'app (Expo / React Native) verrà spostato in un repository privato separato, da cui una build automatica aggiornerà questi file.
 
@@ -8,7 +8,7 @@ Questo repository contiene **solo il sito pubblicato** (GitHub Pages). Il codice
 
 | File | A cosa serve |
 | --- | --- |
-| `app.html` | Apre la guida completa di Lume (carica il bundle `lume-*.js`). |
+| `app.html` | Apre la guida completa di Mangiù (carica il bundle `lume-*.js`). |
 | `lume-718907931722.js` | Bundle web compilato dell'app, quello attualmente in uso. |
 | `index.html`, `voto.js`, `voto.css`, `catalogo.js` | Pagina leggera del voto di gruppo. |
 | `menus.json` | Menu e prezzi verificati pubblicati. |
