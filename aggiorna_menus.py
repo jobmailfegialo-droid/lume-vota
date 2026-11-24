@@ -227,7 +227,7 @@ def verified_proposals(verified, taken_urls, taken_ids, skipped):
     return out
 
 
-def new_venues(sources, existing, rows, places, today, limit, verified=None):
+def new_venues(sources, existing, rows, places, today, limit, verified=None, per_city_limit=NEW_PER_CITY):
     taken_urls = {norm_url(v.get(k)) for v in existing for k in ("source", "menuPage")} - {""}
     taken_ids = {v["id"] for v in existing}
     per_city = Counter(v["city"] for v in existing)
@@ -294,8 +294,8 @@ def new_venues(sources, existing, rows, places, today, limit, verified=None):
         if len(chosen) >= limit:
             skipped["oltre il tetto settimanale"] += 1
             continue
-        if added_in_city[v["city"]] >= NEW_PER_CITY:
-            skipped["già %d nuovi nella stessa città questa settimana" % NEW_PER_CITY] += 1
+        if added_in_city[v["city"]] >= per_city_limit:
+            skipped["già %d nuovi nella stessa città questa settimana" % per_city_limit] += 1
             continue
         added_in_city[v["city"]] += 1
         taken_ids.add(v["id"])
@@ -421,6 +421,7 @@ def main():
     cli.add_argument("--dataset", type=Path, default=Path("dati-italia.zip"))
     cli.add_argument("--report", type=Path, default=Path("riassunto-prezzi.md"))
     cli.add_argument("--new-limit", type=int, default=300)
+    cli.add_argument("--per-citta", type=int, default=NEW_PER_CITY, help="massimo di locali nuovi per città in un giro")
     cli.add_argument("--min-revision", type=int, default=BUNDLE_REVISION)
     cli.add_argument("--app", type=Path, default=Path("app.html"), help="pagina dell'app da cui leggere la revisione del bundle")
     cli.add_argument("--today", default=datetime.now(timezone.utc).date().isoformat())
@@ -435,7 +436,7 @@ def main():
     changes, anomalies, confirmed, missing, blocked = update_existing(venues, sources, args.today)
     rows, places = dataset_lookup(args.dataset)
     verified = load_verified(args.results)
-    added, skipped = new_venues(sources, venues, rows, places, args.today, args.new_limit, verified)
+    added, skipped = new_venues(sources, venues, rows, places, args.today, args.new_limit, verified, args.per_citta)
     venues.extend(added)
 
     # Anche senza novità, una revisione non più alta di quella dell'app va alzata, altrimenti l'app ignora il file.

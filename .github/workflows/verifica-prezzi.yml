@@ -27,6 +27,10 @@ on:
         description: prova o tutto (solo con places_token)
         required: false
         default: prova
+      pubblica_run_id:
+        description: Pubblica nell'app i prezzi verificati di questo run di "Verifica prezzi" (apre una PR su menus.json)
+        required: false
+        default: ''
   push:
     paths: ['.github/workflows/verifica-prezzi.yml', 'verifica_prezzi.py']
 permissions:
@@ -34,6 +38,43 @@ permissions:
   actions: read
   id-token: write
 jobs:
+  pubblica:
+    # Porta in menus.json (cioè nell'app) tutti i locali verificati di un run, senza tetto settimanale.
+    if: inputs.pubblica_run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: prezzi-verificati
+          path: risultati/verificati
+          run-id: ${{ inputs.pubblica_run_id }}
+          github-token: ${{ github.token }}
+      - name: Aggiorna menus.json con i controlli
+        id: aggiorna
+        run: |
+          python3 aggiorna_menus.py risultati --new-limit 20000 --per-citta 20000 --report riassunto-prezzi.md
+          cat riassunto-prezzi.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Apri la PR
+        if: steps.aggiorna.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ steps.aggiorna.outputs.revision }}
+        run: |
+          branch="prezzi/verificati-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add menus.json
+          git commit -q -m "Pubblica i prezzi verificati (revisione $REVISION)"
+          git push -q origin "$branch"
+          url=$(gh pr create --base main --head "$branch" --title "Prezzi verificati nell'app (revisione $REVISION)" --body-file riassunto-prezzi.md)
+          echo "PR aperta: $url" >> "$GITHUB_STEP_SUMMARY"
   places:
     if: inputs.places_token != ''
     uses: ./.github/workflows/siti-places.yml
@@ -42,7 +83,7 @@ jobs:
       fase: ${{ inputs.places_fase }}
       verifica_run_id: ''
   verifica:
-    if: inputs.places_token == ''
+    if: inputs.places_token == '' && inputs.pubblica_run_id == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
