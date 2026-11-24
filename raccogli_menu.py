@@ -29,6 +29,7 @@ BLOCKS = set("p br div li tr td section article h1 h2 h3 h4 h5 h6 dt dd figure".
 MENU_WORD = re.compile(r"\b(menu|menù|carta|listino|speisekarte)\b",re.I)
 BAD_NAME = re.compile(r"\b(coperto|minimo|a partire|al kg|all.etto|all.hg|al pezzo|supplemento|delivery|consegna|sconto|prezzo|totale|minimum|aggiunta|servizio|privacy|cookie|iva|spese|prenota|carrello)\b",re.I)
 TARIFF = re.compile(r"(?:€|EUR)\s*(\d{1,3}(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:€|EUR)",re.I)
+PREZZO_NUDO = re.compile(r"\s*€?\s*\d{1,3}[.,]\d{2}\s*€?\s*")
 MENU_PATH = re.compile(r"\.(pdf|jpeg|jpg|png|webp)$",re.I)
 CANDIDATE_LIMIT = 320
 PERCORSI_MENU = ("menu/","menu","il-menu/","carta/","menu.pdf","ristorante/menu/","menu-ristorante/","pizze/")
@@ -67,7 +68,7 @@ class NoRedirect(HTTPRedirectHandler):
 def request(url, limit):
     if not public_url(url) or not public_host(urlsplit(url).hostname): raise ValueError("indirizzo escluso")
     req = Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/pdf,image/*;q=0.8,*/*;q=0.3"})
-    with build_opener(NoRedirect()).open(req,timeout=7) as page:
+    with build_opener(NoRedirect()).open(req,timeout=15) as page:
         body = page.read(limit+1)
         if len(body)>limit: raise ValueError("risorsa troppo grande")
         return page.headers.get_content_type(),page.headers.get_content_charset() or "utf-8",body
@@ -91,7 +92,8 @@ class HostPolicy:
                     url=urljoin(url,redirect.headers["Location"])
             else: rules.disallow_all=True
         except HTTPError as err:
-            if err.code in (404,410): rules.allow_all = True
+            # RFC 9309: robots.txt con errore 4xx = nessuna regola; 5xx = sito indisponibile, non si legge.
+            if 400 <= err.code < 500 and err.code != 429: rules.allow_all = True
             else: rules.disallow_all = True
         except (OSError,ValueError): rules.disallow_all = True
         return rules
@@ -203,6 +205,10 @@ def extract_prices(lines,structured):
             if 2<len(title)<=45 and not TARIFF.search(title) and not title[:1].islower():
                 name=title+" – "+name;method="titolo_e_ingredienti"
         add(name,cents(price.group(1) or price.group(2)),method)
+    for i,line in enumerate(lines):
+        # Prezzo senza simbolo da solo su una riga (es. "8,50"), sotto il nome del piatto.
+        if i>0 and PREZZO_NUDO.fullmatch(line) and not TARIFF.search(line) and not TARIFF.search(lines[i-1]) and not PREZZO_NUDO.fullmatch(lines[i-1]):
+            add(lines[i-1],cents(re.sub(r"[^\d.,]","",line)),"prezzo_riga_sotto")
     return list(found.values())[:CANDIDATE_LIMIT]
 
 def menu_links(page,base):
@@ -284,6 +290,7 @@ def collect(seed,policy):
         result["status"]="prezzi_candidati" if any(p["candidates"] for p in result["pages"]) else "fonte_da_verificare" if result["pages"] else "nessun_menu"
     except (ValueError,OSError,subprocess.TimeoutExpired) as err:
         result["status"]="http_"+str(err.code) if isinstance(err,HTTPError) else "non_accessibile"
+        if not isinstance(err,HTTPError):result["reason"]=(type(err).__name__+": "+str(err))[:90]
     return result
 
 def seeds(archive,mode,regione=None,capoluoghi=None,siti_extra=None,solo_extra=False):
