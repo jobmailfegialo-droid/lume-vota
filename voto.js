@@ -14,6 +14,10 @@ function keyFor(key){let value=localStorage.getItem(key);if(!uid.test(value||'')
 // Same wording as features/menus/pollModel.js: the link preview is shared by every poll, so the text names the venues.
 function inviteText(names,link){const list=names.map(n=>String(n||'').replace(/\s+/g,' ').trim()).filter(Boolean);return ['Dove mangiamo? Votate qui 👇',...(list.length?[list.map(n=>'• '+n).join('\n')]:[]),link].join('\n\n');}
 function shareURL(){return location.origin+location.pathname+'#'+pollId;}
+// Foto indicativa per tipo di locale, come nell'app.
+function photoFor(text){const t=key(text);return 'foto-'+(/pizz/.test(t)?'pizza':/(bar|pub|aperitiv|cocktail|vino|enotec|birr)/.test(t)?'aperitivo':/(caff|colazion|pasticc|gelat|bakery|forno|cornett)/.test(t)?'colazione':'tavola')+'.jpg';}
+// Link alla scheda nella web app: osm-n123 resta com'è, i menù del catalogo diventano menu-<id>.
+function appKey(id){const v=String(id||'');return /^osm-[nw]\d{1,19}$/.test(v)?v:/^[a-z0-9][a-z0-9-]{0,79}$/.test(v)?'menu-'+v:'';}
 function note(message){el('notice').textContent=message;}
 const key=t=>String(t||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 let places=null, place=null, placeVenues=[], activePlace=-1;
@@ -52,7 +56,7 @@ function renderVenues(){
   const hits=placeVenues.filter(v=>{const text=key(v[1]+' '+v[2]+' '+v[3]);return words.every(w=>text.includes(w));});
   el('hint').textContent=!hits.length?'Nessun locale trovato. Prova con un’altra parola.':hits.length>LIMIT?'Ne mostro '+LIMIT+' su '+hits.length+': scrivi il nome per trovare gli altri.':'';
   el('choices').replaceChildren(...hits.slice(0,LIMIT).map(v=>{
-    const row=createNode('label','','check'),box=document.createElement('input'),text=createNode('span',v[1]);box.type='checkbox';box.checked=selected.some(o=>o.id===v[0]);
+    const row=createNode('label','','checkrow'),box=document.createElement('input'),text=createNode('span',v[1]);box.type='checkbox';box.checked=selected.some(o=>o.id===v[0]);
     if(v[5])text.append(' ',createNode('span','· menu verificato','badge'));
     const meta=[v[2],v[3]].filter(Boolean).join(' · ');if(meta)text.append(createNode('small',meta));
     row.append(box,text);
@@ -71,16 +75,31 @@ function render(data){
   lastData=data;const total=data.counts.reduce((a,b)=>a+b,0),max=Math.max(...data.counts);
   const leaders=data.options.filter((_,i)=>total&&data.counts[i]===max);
   el('title').textContent=data.closed?'Il risultato':'Dove mangiamo?';
-  el('summary').textContent=(data.closed?'Votazione chiusa. ': 'Scegli il tuo locale. ')+(total===1?'1 voto':total+' voti')+
-    (leaders.length===1?' · '+(data.closed?'Ha vinto ':'In testa: ')+leaders[0].name:leaders.length>1?' · Pari merito: '+leaders.map(v=>v.name).join(' e '):'');
+  const head=data.closed?'Votazione chiusa':data.myChoice==null?'Tocca il posto che preferisci':'Hai votato. Puoi cambiare fino alla chiusura';
+  const lead=leaders.length===1?(data.closed?'Ha vinto ':'In testa: ')+leaders[0].name:leaders.length>1?'Pari: '+leaders.map(v=>v.name).join(' e '):'';
+  el('summary').replaceChildren(head+' · ',createNode('b',total===1?'1 voto':total+' voti'),lead?' · '+lead:'');
   el('options').replaceChildren();
   data.options.forEach((v,i)=>{
-    const card=createNode('article','','card'+(data.closed&&leaders.includes(v)?' lead':''));
-    card.append(createNode('h2',v.name));if(v.address)card.append(createNode('p',v.address,'meta'));if(v.detail)card.append(createNode('p',v.detail,'tiny'));
-    const line=createNode('div','','line'),count=createNode('span',data.counts[i]+(data.counts[i]===1?' voto':' voti'),'count');
-    const bar=createNode('div','','indicator'),fill=createNode('i','');fill.style.width=(total?100*data.counts[i]/total:0)+'%';bar.append(fill);card.append(count,bar);
-    if(!data.closed){const b=createNode('button',data.myChoice===i?'Il tuo voto':'Vota');b.disabled=pending||voter===''||data.myChoice===i;b.setAttribute('aria-label',(data.myChoice===i?'Hai votato ':'Vota ')+v.name);b.onclick=()=>act(async()=>{render(await rpc('vote',{poll_id:pollId,voter_key:voter,picked:i}));note('Voto registrato. Puoi cambiarlo fino alla chiusura.');});line.append(b);}
-    const map=createNode('a','Indicazioni','maps');map.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(v.destination||[v.name,v.address].filter(Boolean).join(', '));map.onclick=()=>event('directions');map.target='_blank';map.rel='noopener noreferrer';line.append(map);card.append(line);el('options').append(card);
+    const mine=data.myChoice===i, card=createNode('article','','opt'+(mine?' mine':'')+(total&&data.counts[i]===max&&(data.closed||leaders.length===1)?' lead':''));
+    const pick=createNode('button','','pick');pick.type='button';
+    const parts=String(v.detail||'').split(' · ').map(x=>x.trim()).filter(Boolean);
+    const fair=parts.filter(x=>/^(Prezzo onesto|Prezzi nella media|Caro per )/.test(x)), price=parts.filter(x=>/^Sui .+ a piatto$/.test(x));
+    const kind=parts.filter(x=>!fair.includes(x)&&!price.includes(x));
+    const img=document.createElement('img');img.className='photo';img.alt='';img.loading='lazy';img.src=photoFor(v.name+' '+v.detail);
+    const body=createNode('div','','body');body.append(createNode('p',v.name,'name'));
+    if(kind.length)body.append(createNode('p',kind.join(' · '),'line1'));
+    if(v.address)body.append(createNode('p',v.address,'addr'));
+    if(fair.length||price.length){const pills=createNode('div','','pills');price.forEach(x=>pills.append(createNode('span',x.replace(/^Sui /,'~ '),'pill')));fair.forEach(x=>pills.append(createNode('span',x,'pill'+(x==='Prezzo onesto'?' good':''))));body.append(pills);}
+    pick.append(img,body,createNode('span',mine?'✓':'','check'));
+    pick.disabled=data.closed||pending||voter==='';
+    pick.setAttribute('aria-label',(mine?'Hai votato ':'Vota ')+v.name);
+    if(!data.closed&&!mine)pick.onclick=()=>act(async()=>{render(await rpc('vote',{poll_id:pollId,voter_key:voter,picked:i}));if(navigator.vibrate)navigator.vibrate(12);});
+    const tally=createNode('div','','tally'),bar=createNode('div','','bar'),fill=createNode('i','');fill.style.width=(total?100*data.counts[i]/total:0)+'%';bar.append(fill);
+    tally.append(bar,createNode('span',data.counts[i]+(data.counts[i]===1?' voto':' voti'),'count'));
+    const links=createNode('div','','links'),key=appKey(v.id);
+    if(key){const m=createNode('a',/Sui .+ a piatto|·.+€/.test(v.detail||'')?'Menù e prezzi':'Scheda del locale','menu');m.href='app.html#locale/'+key;links.append(m);}
+    const map=createNode('a','Indicazioni');map.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(v.destination||[v.name,v.address].filter(Boolean).join(', '));map.onclick=()=>event('directions');map.target='_blank';map.rel='noopener noreferrer';links.append(map);
+    card.append(pick,tally,links);el('options').append(card);
   });
   el('until').textContent=data.closed?'I risultati restano consultabili per 30 giorni dalla creazione.':'Si chiude il '+new Date(data.endsAt).toLocaleString('it-IT',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})+'.';
   el('close').hidden=!owner||data.closed;el('cancelClose').hidden=!confirmingClose||data.closed;el('close').textContent=confirmingClose?'Conferma chiusura':'Chiudi la votazione';el('credit').hidden=!data.options.some(v=>/^osm[-:]/.test(v.id));
