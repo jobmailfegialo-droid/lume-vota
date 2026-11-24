@@ -37,6 +37,16 @@ function coverNode(text){
 }
 // Link alla scheda nella web app: osm-n123 resta com'è, i menù del catalogo diventano menu-<id>.
 function appKey(id){const v=String(id||'');return /^osm-[nw]\d{1,19}$/.test(v)?v:/^[a-z0-9][a-z0-9-]{0,79}$/.test(v)?'menu-'+v:'';}
+// Prenota su TheFork (affiliazione Awin TheFork Italia 127369: l'id affiliato va messo in AWIN_AFFILIATE).
+const AWIN_MERCHANT='127369', AWIN_AFFILIATE='';
+const NOT_BOOKABLE=/\b(bar|pub|caff|cafe|coffee|gelat|ice cream|pasticc|bakery|panett|forno|fast food|kebab|paninot|piadin|cornett|colazion)/;
+function cityOf(v){const parts=String(v.address||'').split(',').map(x=>x.trim()).filter(Boolean);return parts.length>1?parts[parts.length-1]:'';}
+function bookingUrl(v){
+  if(!v?.name||NOT_BOOKABLE.test(String(v.detail||'').toLowerCase()))return '';
+  const url='https://www.thefork.it/search?queryText='+encodeURIComponent([v.name,cityOf(v)].filter(Boolean).join(' '));
+  return /^\d{3,12}$/.test(AWIN_AFFILIATE)?'https://www.awin1.com/cread.php?awinmid='+AWIN_MERCHANT+'&awinaffid='+AWIN_AFFILIATE+'&ued='+encodeURIComponent(url):url;
+}
+function bookingClick(v){fetch(LUME_API+'/rest/v1/rpc/lume_booking_click',{method:'POST',headers:{apikey:LUME_PUBLIC_KEY,'Content-Type':'application/json'},body:JSON.stringify({place_key:String(v.id||'').slice(0,120),place_name:String(v.name||'').slice(0,160),city:cityOf(v).slice(0,120),source:'thefork',surface:'voto'}),keepalive:true}).catch(()=>{});}
 function note(message){el('notice').textContent=message;}
 const key=t=>String(t||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 let places=null, place=null, placeVenues=[], activePlace=-1;
@@ -118,6 +128,10 @@ function render(data){
     const links=createNode('div','','links'),key=appKey(v.id);
     if(key){const m=createNode('a',/Sui .+ a piatto|·.+€/.test(v.detail||'')?'Menù e prezzi':'Scheda del locale','menu');m.href='app.html#locale/'+key;links.append(m);}
     const map=createNode('a','Indicazioni');map.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(v.destination||[v.name,v.address].filter(Boolean).join(', '));map.onclick=()=>event('directions');map.target='_blank';map.rel='noopener noreferrer';links.append(map);
+    // Sul locale in testa (o vincitore): Prenota. Stessa logica dell'app, features/discovery/booking.js.
+    const winner=total&&data.counts[i]===max&&(data.closed||leaders.length===1);
+    const book=winner?bookingUrl(v):'';
+    if(book){const b=createNode('a','Prenota','book');b.href=book;b.target='_blank';b.rel='noopener';b.onclick=()=>bookingClick(v);links.prepend(b);}
     card.append(pick,tally,links);el('options').append(card);
   });
   el('until').textContent=data.closed?'I risultati restano consultabili per 30 giorni dalla creazione.':'Si chiude il '+new Date(data.endsAt).toLocaleString('it-IT',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})+'.';
