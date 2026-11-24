@@ -1,0 +1,51 @@
+name: Coda Google Places per città
+# Mette in coda (funzione Supabase lume-siti, azione carica) i locali senza sito dei capoluoghi indicati,
+# per la ricerca dei siti con Google Places. Non fa ricerche: la spesa la decide il tetto in lume_siti_places_config.
+on:
+  workflow_dispatch:
+    inputs:
+      province:
+        description: sigle dei capoluoghi, separate da virgola
+        required: true
+        default: MI,RM
+      tipi:
+        description: tipi di locale (restaurant,cafe,bar,fast_food,pub,ice_cream)
+        required: true
+        default: restaurant
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  coda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FUNZIONE: https://ubalduqlnkubddemkmtz.supabase.co/functions/v1/lume-siti
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Chiave pubblica di Supabase
+        run: echo "ANON=$(grep -o 'eyJhbGciOi[A-Za-z0-9._-]*' catalogo.js | head -1)" >> "$GITHUB_ENV"
+      - name: Carica la coda
+        env:
+          PROVINCE: ${{ inputs.province }}
+          TIPI: ${{ inputs.tipi }}
+        run: |
+          python3 strumenti/coda_places.py --province "$PROVINCE" --tipi "$TIPI" --per-capoluogo 0 > coda.json
+          python3 - <<'PY'
+          import json, os, urllib.request
+          def oidc():
+              req = urllib.request.Request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=lume-siti',
+                  headers={'Authorization': 'bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+              t = json.load(urllib.request.urlopen(req, timeout=30))['value']
+              print('::add-mask::' + t, flush=True)
+              return t
+          coda = json.load(open('coda.json'))
+          for i in range(0, len(coda), 1000):
+              req = urllib.request.Request(os.environ['FUNZIONE'], json.dumps({'azione': 'carica', 'righe': coda[i:i + 1000]}).encode(), {
+                  'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['ANON'], 'apikey': os.environ['ANON'],
+                  'x-github-oidc': oidc()})
+              print(i, json.load(urllib.request.urlopen(req, timeout=120)), flush=True)
+          print('In coda:', len(coda))
+          PY
