@@ -12,7 +12,7 @@ async function rpc(name,body){
 }
 function keyFor(key){let value=localStorage.getItem(key);if(!uid.test(value||'')){value=crypto.randomUUID();localStorage.setItem(key,value);}return value;}
 // Same wording as features/menus/pollModel.js: the link preview is shared by every poll, so the text names the venues.
-function inviteText(names,link){const list=names.map(n=>String(n||'').trim()).filter(Boolean);const choice=list.length>1?list.slice(0,-1).join(', ')+' o '+list[list.length-1]:list[0]||'';return (choice?'Dove mangiamo? '+choice+'. Vota su Mangiù: ':'Dove mangiamo? Vota il locale su Mangiù: ')+link;}
+function inviteText(names,link){const list=names.map(n=>String(n||'').replace(/\s+/g,' ').trim()).filter(Boolean);return ['Dove mangiamo? Votate qui 👇',...(list.length?[list.map(n=>'• '+n).join('\n')]:[]),link].join('\n\n');}
 function shareURL(){return location.origin+location.pathname+'#'+pollId;}
 function note(message){el('notice').textContent=message;}
 const key=t=>String(t||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -92,7 +92,7 @@ function render(data){
   el('rateLink').href='app.html#valuta'+(spot?'/'+spot.destination.split(',').map(n=>(+n).toFixed(5)).join(','):'');
   el('host').hidden=!host||!!owner||!voted;
   if(host){el('hostText').textContent='Segui '+host.nome+' su Mangiù: vedrai i posti che prova e le prossime cene che propone.';el('hostLink').href='app.html#profilo/'+host.id;}
-  el('whatsapp').href='https://wa.me/?text='+encodeURIComponent(inviteText(data.options.map(v=>v.name),shareURL()));
+  el('whatsapp').href='https://wa.me/?text='+encodeURIComponent(inviteText(data.options.map(v=>[v.name,v.address].filter(Boolean).join(' · ')),shareURL()));
 }
 async function refresh(){
   const seq=++revision;const data=await rpc('status',{poll_id:pollId,voter_key:voter||null});
