@@ -2,6 +2,8 @@ name: Siti dei locali da Google Places
 # Cerca con Google Places (API New) il sito dei ristoranti senza sito in OSM nei capoluoghi sotto obiettivo,
 # poi ne legge i menu. La ricerca gira nella funzione Supabase lume-siti, che riconosce questo repository
 # dal token OIDC di GitHub Actions e tiene un tetto di 950 Place Details al mese (gratis): spesa zero.
+# Regole Google per l'Europa: dei dati Places si conserva solo il place_id. Finita la lettura dei menu,
+# la funzione cancella siti e nomi Google (azione pulisci) e l'artifact con i siti dura 3 giorni (tempo per l'OCR).
 # Riparte da sola il 1° di ogni mese con i 950 successivi della coda.
 on:
   schedule:
@@ -96,4 +98,16 @@ jobs:
         with:
           name: fonti-places
           path: raccolta/
-          retention-days: 14
+          retention-days: 3
+      - name: Cancella i dati Google dalla banca dati
+        if: inputs.fase != 'prova'
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=lume-siti',
+              headers={'Authorization': 'bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          t = json.load(urllib.request.urlopen(req, timeout=30))['value']; print('::add-mask::' + t)
+          req = urllib.request.Request(os.environ['FUNZIONE'], json.dumps({'azione': 'pulisci'}).encode(), {
+              'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['ANON'], 'apikey': os.environ['ANON'], 'x-github-oidc': t})
+          print(json.load(urllib.request.urlopen(req, timeout=60)))
+          PY
