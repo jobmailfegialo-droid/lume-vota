@@ -15,7 +15,26 @@ function keyFor(key){let value=localStorage.getItem(key);if(!uid.test(value||'')
 function inviteText(names,link){const list=names.map(n=>String(n||'').replace(/\s+/g,' ').trim()).filter(Boolean);return ['Dove mangiamo? Votate qui 👇',...(list.length?[list.map(n=>'• '+n).join('\n')]:[]),link].join('\n\n');}
 function shareURL(){return location.origin+location.pathname+'#'+pollId;}
 // Foto indicativa per tipo di locale, come nell'app.
-function photoFor(text){const t=key(text);return 'foto-'+(/pizz/.test(t)?'pizza':/(bar|pub|aperitiv|cocktail|vino|enotec|birr)/.test(t)?'aperitivo':/(caff|colazion|pasticc|gelat|bakery|forno|cornett)/.test(t)?'colazione':'tavola')+'.jpg';}
+// Copertina coerente con il locale: la foto solo quando corrisponde (pizza, aperitivo, colazione, pasta
+// per le cucine italiane); per le altre cucine un simbolo su colore, mai un piatto sbagliato.
+const ART=[[/pesce|seafood|fish|frutti di mare|crudo/,'🐟','#1F6F8B'],[/sushi|giappon|japan|ramen|poke/,'🍣','#2F4B8F'],[/cines|chinese|dim sum/,'🥟','#B3261E'],
+  [/indian|curry/,'🍛','#C98A1B'],[/thai|vietnam|asiat|asian|corean|korean/,'🍜','#1F7A4D'],[/messican|mexican|tacos|latin/,'🌮','#D2691E'],[/burger|american|fast food/,'🍔','#8C2F3F'],
+  [/kebab|turk|libanes|lebanese|greek|grec|araba|falafel/,'🥙','#7A5C2E'],[/steak|griglia|grill|carne|braceria|bbq/,'🥩','#6B2A2A'],[/gelat|ice cream/,'🍨','#1F9AA8'],
+  [/panin|sandwich|piadin|toast|focacc/,'🥪','#B07A20'],[/vegan|vegetar|salad|insalat/,'🥗','#3E8E5A']];
+function coverFor(text){
+  const t=key(text);
+  if(/pizz/.test(t))return {photo:'foto-pizza.jpg'};
+  for(const [re,emoji,color] of ART)if(re.test(t))return {emoji,color};
+  if(/(caff|colazion|pasticc|bakery|forno|cornett)/.test(t))return {photo:'foto-colazione.jpg'};
+  if(/\b(bar|pub|aperitiv|cocktail|vino|enotec|birr)/.test(t))return {photo:'foto-aperitivo.jpg'};
+  if(/(italian|trattor|osteria|pasta|emilian|roman|toscan|ligur|piemont|lombard|sicil|napolet|pugli|sard|venet|bolognes)/.test(t))return {photo:'foto-tavola.jpg'};
+  return {emoji:'🍽️',color:'#5B4A3F'};
+}
+function coverNode(text){
+  const c=coverFor(text);
+  if(c.photo){const img=document.createElement('img');img.className='photo';img.alt='';img.loading='lazy';img.src=c.photo;return img;}
+  const d=createNode('div',c.emoji,'photo art');d.style.background=c.color;d.setAttribute('aria-hidden','true');return d;
+}
 // Link alla scheda nella web app: osm-n123 resta com'è, i menù del catalogo diventano menu-<id>.
 function appKey(id){const v=String(id||'');return /^osm-[nw]\d{1,19}$/.test(v)?v:/^[a-z0-9][a-z0-9-]{0,79}$/.test(v)?'menu-'+v:'';}
 function note(message){el('notice').textContent=message;}
@@ -53,7 +72,7 @@ function asOption(v){
 }
 function renderVenues(){
   if(!place)return;const words=key(el('query').value).split(' ').filter(Boolean);
-  const hits=placeVenues.filter(v=>{const text=key(v[1]+' '+v[2]+' '+v[3]);return words.every(w=>text.includes(w));});
+  const hits=placeVenues.filter(v=>{if(!/[a-zà-ÿ]{2}/i.test(v[1]||''))return false;const text=key(v[1]+' '+v[2]+' '+v[3]);return words.every(w=>text.includes(w));});
   el('hint').textContent=!hits.length?'Nessun locale trovato. Prova con un’altra parola.':hits.length>LIMIT?'Ne mostro '+LIMIT+' su '+hits.length+': scrivi il nome per trovare gli altri.':'';
   el('choices').replaceChildren(...hits.slice(0,LIMIT).map(v=>{
     const row=createNode('label','','checkrow'),box=document.createElement('input'),text=createNode('span',v[1]);box.type='checkbox';box.checked=selected.some(o=>o.id===v[0]);
@@ -85,7 +104,7 @@ function render(data){
     const parts=String(v.detail||'').split(' · ').map(x=>x.trim()).filter(Boolean);
     const fair=parts.filter(x=>/^(Prezzo onesto|Prezzi nella media|Caro per )/.test(x)), price=parts.filter(x=>/^Sui .+ a piatto$/.test(x));
     const kind=parts.filter(x=>!fair.includes(x)&&!price.includes(x));
-    const img=document.createElement('img');img.className='photo';img.alt='';img.loading='lazy';img.src=photoFor(v.name+' '+v.detail);
+    const img=coverNode(v.name+' '+v.detail);
     const body=createNode('div','','body');body.append(createNode('p',v.name,'name'));
     if(kind.length)body.append(createNode('p',kind.join(' · '),'line1'));
     if(v.address)body.append(createNode('p',v.address,'addr'));
