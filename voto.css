@@ -44,6 +44,7 @@ a{color:var(--ink)}
 .links{display:flex;gap:16px;padding:9px 12px 11px 108px;border-top:1px solid var(--line);font-size:.86rem;font-weight:650}
 .links a{text-decoration:none;color:var(--ink)}
 .links a.menu{color:var(--brand)}
+.links a.book{color:#fff;background:var(--brand);padding:2px 12px;border-radius:999px;white-space:nowrap;align-self:center;line-height:1.5}
 #until{font-size:.84rem;color:var(--muted);text-align:center;margin:4px 0 16px}
 
 /* Pulsanti */
