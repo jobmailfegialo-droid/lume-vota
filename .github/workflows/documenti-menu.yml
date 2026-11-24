@@ -20,11 +20,11 @@ permissions:
 jobs:
   lettura:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 130
     strategy:
       fail-fast: false
       matrix:
-        part: [0, 1, 2, 3]
+        part: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,9 +40,11 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-ita tesseract-ocr-eng
       - name: Leggi prezzi affiancati sulla stessa riga
+        # Tempo per step sotto quello del job: se scade, i risultati letti fin lì si caricano comunque.
+        timeout-minutes: 115
         env:
           PART: ${{ matrix.part }}
-        run: python3 leggi_menu_documenti.py fonti risultati --parts 4 --part "$PART"
+        run: python3 leggi_menu_documenti.py fonti risultati --parts 8 --part "$PART"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
