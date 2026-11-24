@@ -11,6 +11,10 @@ on:
         description: ID del run di "Leggi PDF e foto dei menu" (vuoto se non c'è)
         required: false
         default: ''
+      documenti2_run_id:
+        description: ID di un secondo run di "Leggi PDF e foto dei menu" (vuoto se non c'è)
+        required: false
+        default: ''
       places_run_id:
         description: ID del run di "Siti dei locali da Google Places" da aggiungere (vuoto se non c'è)
         required: false
@@ -59,6 +63,13 @@ jobs:
           run-id: ${{ inputs.documenti_run_id }}
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
+        if: inputs.documenti2_run_id != ''
+        with:
+          pattern: documenti-*
+          path: documenti2
+          run-id: ${{ inputs.documenti2_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
         if: inputs.places_run_id != ''
         with:
           name: fonti-places
@@ -69,7 +80,7 @@ jobs:
         run: |
           shopt -s nullglob
           [ -f places/esiti.ndjson ] && cat places/esiti.ndjson >> raccolta/esiti.ndjson
-          python3 verifica_prezzi.py raccolta/esiti.ndjson --documenti documenti/*/documenti.ndjson --output verifica
+          python3 verifica_prezzi.py raccolta/esiti.ndjson --documenti documenti/*/documenti.ndjson documenti2/*/documenti.ndjson --output verifica
           python3 copertura.py raccolta/esiti.ndjson --verificati verifica/prezzi-verificati.json --output verifica
           tee -a "$GITHUB_STEP_SUMMARY" < verifica/copertura.md
       - uses: actions/upload-artifact@v4
