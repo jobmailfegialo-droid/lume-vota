@@ -12,7 +12,7 @@ async function rpc(name,body){
 }
 function keyFor(key){let value=localStorage.getItem(key);if(!uid.test(value||'')){value=crypto.randomUUID();localStorage.setItem(key,value);}return value;}
 // Same wording as features/menus/pollModel.js: the link preview is shared by every poll, so the text names the venues.
-function inviteText(names,link){const list=names.map(n=>String(n||'').trim()).filter(Boolean);const choice=list.length>1?list.slice(0,-1).join(', ')+' o '+list[list.length-1]:list[0]||'';return (choice?'Dove mangiamo? '+choice+'. Vota su Lume: ':'Dove mangiamo? Vota il locale su Lume: ')+link;}
+function inviteText(names,link){const list=names.map(n=>String(n||'').trim()).filter(Boolean);const choice=list.length>1?list.slice(0,-1).join(', ')+' o '+list[list.length-1]:list[0]||'';return (choice?'Dove mangiamo? '+choice+'. Vota su Mangiù: ':'Dove mangiamo? Vota il locale su Mangiù: ')+link;}
 function shareURL(){return location.origin+location.pathname+'#'+pollId;}
 function note(message){el('notice').textContent=message;}
 const key=t=>String(t||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -45,7 +45,7 @@ async function choosePlace(p){
   el('venueBox').hidden=false;el('query').value='';renderVenues();el('query').focus();
 }
 function asOption(v){
-  return {id:v[0],name:v[1],address:[v[3],place[0]].filter(Boolean).join(', ').slice(0,320),detail:[v[2],v[5]?'menu verificato su Lume':''].filter(Boolean).join(' · '),destination:v[4]||''};
+  return {id:v[0],name:v[1],address:[v[3],place[0]].filter(Boolean).join(', ').slice(0,320),detail:[v[2],v[5]?'menu verificato su Mangiù':''].filter(Boolean).join(' · '),destination:v[4]||''};
 }
 function renderVenues(){
   if(!place)return;const words=key(el('query').value).split(' ').filter(Boolean);
@@ -84,10 +84,14 @@ function render(data){
   });
   el('until').textContent=data.closed?'I risultati restano consultabili per 30 giorni dalla creazione.':'Si chiude il '+new Date(data.endsAt).toLocaleString('it-IT',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})+'.';
   el('close').hidden=!owner||data.closed;el('cancelClose').hidden=!confirmingClose||data.closed;el('close').textContent=confirmingClose?'Conferma chiusura':'Chiudi la votazione';el('credit').hidden=!data.options.some(v=>/^osm[-:]/.test(v.id));
-  // After voting, a signed poll offers to follow the person who sent it: that is how a vote turns into a friend on Lume.
+  // After voting, a signed poll offers to follow the person who sent it: that is how a vote turns into a friend on Mangiù.
   const host=data.host&&uid.test(data.host.id||'')?data.host:null;
-  el('host').hidden=!host||!!owner||(data.myChoice==null&&!data.closed);
-  if(host){el('hostText').textContent='Segui '+host.nome+' su Lume: vedrai i posti che prova e le prossime cene che propone.';el('hostLink').href='app.html#profilo/'+host.id;}
+  // Dopo il voto, chi non ha creato la votazione vede l'invito a valutare i suoi posti, vicino al locale scelto.
+  const voted=data.myChoice!=null||data.closed;el('join').hidden=!!owner||!voted;
+  const spot=[data.options[data.myChoice],...data.options].find(v=>/^-?\d{1,2}(\.\d+)?,-?\d{1,3}(\.\d+)?$/.test(v?.destination||''));
+  el('rateLink').href='app.html#valuta'+(spot?'/'+spot.destination.split(',').map(n=>(+n).toFixed(5)).join(','):'');
+  el('host').hidden=!host||!!owner||!voted;
+  if(host){el('hostText').textContent='Segui '+host.nome+' su Mangiù: vedrai i posti che prova e le prossime cene che propone.';el('hostLink').href='app.html#profilo/'+host.id;}
   el('whatsapp').href='https://wa.me/?text='+encodeURIComponent(inviteText(data.options.map(v=>v.name),shareURL()));
 }
 async function refresh(){
