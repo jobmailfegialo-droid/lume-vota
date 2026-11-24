@@ -13,20 +13,35 @@ import tempfile
 from raccogli_menu import HostPolicy, clean, cents, dish_name, extract_prices, public_url
 
 END_AMOUNT = re.compile(r"^(?P<name>.+?)(?:\s{2,}|\.{2,})\s*(?:€\s*)?(?P<price>\d{1,3}[,.]\d{2})\s*(?:€)?\s*$")
+# Nei menu impaginati il prezzo è spesso un intero o con un decimale, staccato dal nome da più spazi o puntini.
+END_INTERO = re.compile(r"^(?P<name>[^\d€]*[A-Za-zÀ-ÿ][^€]*?)(?:\s{2,}|\s*\.{3,}\s*)(?:€\s*)?(?P<price>\d{1,3}(?:[,.]\d{1,2})?)\s*(?:€)?\s*$")
+PREZZO_SOLO = re.compile(r"(?:€\s*)?\d{1,3}(?:[,.]\d{1,2})?(?:\s*€)?")
 SKIP_UNIT = re.compile(r"(?:/|\bal(?:l[ao]|l[’'])?)\s*(?:kg|hg|etto|100\s*g|persona|pezzo)\b|(?:per|min\.?)\s*\d+\s*(?:persone|pezzi)",re.I)
+
+def segmenti(raw):
+    """Una riga impaginata su più colonne ("Margherita   7      Diavola   8") diventa più coppie nome-prezzo."""
+    pezzi=[p for p in re.split(r"\s{4,}",raw.strip()) if p]
+    if len(pezzi)<=2:return [raw]
+    uniti,i=[],0
+    while i<len(pezzi):
+        if i+1<len(pezzi) and not PREZZO_SOLO.fullmatch(pezzi[i]) and PREZZO_SOLO.fullmatch(pezzi[i+1]):
+            uniti.append(pezzi[i]+"   "+pezzi[i+1]);i+=2
+        else:uniti.append(pezzi[i]);i+=1
+    return uniti
 
 def rows(text,method):
     found={}
-    for raw in text.splitlines():
-        if SKIP_UNIT.search(raw):continue
-        explicit=extract_prices([clean(raw)],[])
-        matched=END_AMOUNT.fullmatch(raw.strip())
-        candidates=explicit
-        if not candidates and matched:
-            name=dish_name(matched["name"]);price=cents(matched["price"])
-            if name and price:candidates=[{"name":name,"cents":price}]
-        for item in candidates:
-            found[item["name"].lower(),item["cents"]]={"name":item["name"],"cents":item["cents"],"method":method}
+    for riga in text.splitlines():
+        if SKIP_UNIT.search(riga):continue
+        for raw in segmenti(riga):
+            explicit=extract_prices([clean(raw)],[])
+            matched=END_AMOUNT.fullmatch(raw.strip()) or END_INTERO.fullmatch(raw.strip())
+            candidates=explicit
+            if not candidates and matched:
+                name=dish_name(matched["name"]);price=cents(matched["price"])
+                if name and price:candidates=[{"name":name,"cents":price}]
+            for item in candidates:
+                found[item["name"].lower(),item["cents"]]={"name":item["name"],"cents":item["cents"],"method":method}
     return list(found.values())
 
 def run(cmd,timeout=30):
