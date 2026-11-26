@@ -1,0 +1,14 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Nuova password · Mangiù</title><style>body{margin:0;font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;background:#fff}header{padding:18px 20px;border-bottom:1px solid #eee}.brand{color:#EE5A34;font-weight:800;font-size:22px;text-decoration:none}main{max-width:520px;margin:0 auto;padding:40px 20px}h1{font-size:28px;margin:0 0 8px}.lead{color:#555}</style><style>form{display:grid;gap:12px;max-width:420px}input{font:inherit;padding:13px 14px;border:1px solid #ddd;border-radius:12px}button{font:inherit;font-weight:700;padding:13px;border:0;border-radius:24px;background:#EE5A34;color:#fff}button:disabled{opacity:.5}</style></head><body><header><a class="brand" href="/">Mangiù</a></header><main><h1 id="t">Nuova password</h1><p class="lead" id="m">Apri Mangiù e inserisci il codice che ti abbiamo mandato per email.</p>
+<form id="f" hidden><input id="p" type="password" autocomplete="new-password" placeholder="Nuova password" minlength="8" required><button id="b">Salva</button></form></main>
+<script>
+var URL_='https://ubalduqlnkubddemkmtz.supabase.co',KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWxkdXFsbmt1YmRkZW1rbXR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNzE1MzgsImV4cCI6MjA5Mjk0NzUzOH0.mf1r62f392p6BnugWPT7Fkn7zB-tMhs2ytjwTE1MBDs';
+var h=new URLSearchParams(location.hash.slice(1)),tok=h.get('access_token'),t=document.getElementById('t'),m=document.getElementById('m'),f=document.getElementById('f');
+history.replaceState(null,'',location.pathname);
+if(h.get('error')){t.textContent='Link scaduto';m.textContent='Apri Mangiù, tocca «Password dimenticata?» e chiedi un nuovo codice.';}
+else if(tok&&h.get('type')==='recovery'){m.textContent='Almeno 8 caratteri.';f.hidden=false;}
+f.onsubmit=function(e){e.preventDefault();var b=document.getElementById('b');b.disabled=true;
+fetch(URL_+'/auth/v1/user',{method:'PUT',headers:{apikey:KEY,Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('p').value})})
+.then(function(r){return r.json().then(function(d){if(!r.ok)throw d;})})
+.then(function(){f.hidden=true;t.textContent='Password cambiata';m.textContent='Torna su Mangiù e accedi con la nuova password.';})
+.catch(function(d){b.disabled=false;m.textContent=d&&d.error_code==='same_password'?'Scegli una password diversa da quella di prima.':d&&d.error_code==='weak_password'?'Scegli una password più sicura, di almeno 8 caratteri.':'Link scaduto o non valido. Chiedi un nuovo codice dall’app.';});};
+</script></body></html>
